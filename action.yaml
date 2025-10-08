@@ -1,0 +1,22 @@
+name: 'makepad-packaging-action'
+description: 'Build And Release Makepad Apps, including MacOS, Windows, Linux, Android and iOS, using GitHub Actions.'
+author: 'Tyrese Luo <tyreseluo@outlook.com>'
+branding:
+  icon: 'box'
+  color: 'blue'
+
+inputs:
+  args:
+    description: 'Arguments for the `cargo build <args>` and `cargo makepad <args>` commands. For example, `--release --target x86_64-pc-windows-msvc`.'
+
+  include_release:
+    description: 'Whether to include the release build (default: true)'
+    default: 'true'
+
+  include_debug:
+    description: 'Whether to include the debug build (default: false)'
+    default: 'false'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

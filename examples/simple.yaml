@@ -1,0 +1,33 @@
+name: Build Makepkg Project
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: ubuntu-22.04
+            # target: x86_64-unknown-linux-gnu
+            target: aarch64-linux-android
+          # - os: ubuntu-20.04
+          # - os: ubuntu-24.04-arm
+          # - os: ubuntu-22.04-arm
+          # - os: ubuntu-20.04-arm
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: ./
+        with:
+          args: --target ${{ matrix.target }}
