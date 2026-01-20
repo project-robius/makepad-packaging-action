@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from "fs";
 import { isAbsolute, join } from "path";
 import { buildAndroidArtifacts, installAndroidBuildDependencies } from "./builds/android";
+import { buildIosArtifacts, installIosBuildDependencies } from "./builds/ios";
 import { PackagingConfig } from "./config";
 import type { Artifact, BuildOptions, InitOptions, MobileTarget, TargetArch } from "./types";
 import { execCommand, getTargetInfo, isCommandAvailable, parse_manifest_toml, retry } from "./utils";
@@ -304,17 +305,19 @@ async function buildMobileArtifacts(root: string, initOptions: InitOptions, buil
     target_info: { target_platform: MobileTarget; arch: TargetArch };
   };
 
+  const { app_version, app_name, identifier, main_binary_name } = initOptions;
+
+  buildOptions.app_version = app_version ?? android_config.version;
+  buildOptions.app_name = app_name ?? android_config.product_name;
+  buildOptions.identifier = identifier ?? android_config.identifier;
+  buildOptions.main_binary_name = main_binary_name ?? android_config.main_binary_name;
+
   if (target_platform === 'android') {
-
-    const { app_version, app_name, identifier, main_binary_name } = initOptions;
-
-    buildOptions.app_version = app_version ?? android_config.version;
-    buildOptions.app_name = app_name ?? android_config.product_name;
-    buildOptions.identifier = identifier ?? android_config.identifier;
-    buildOptions.main_binary_name = main_binary_name ?? android_config.main_binary_name;
-
     // Ensure Android build dependencies are installed
-    await installAndroidBuildDependencies(arch);
+    await installAndroidBuildDependencies(
+      buildOptions.android_abi ?? arch,
+      buildOptions.android_full_ndk ?? false,
+    );
 
     return await buildAndroidArtifacts(
       root,
@@ -323,7 +326,8 @@ async function buildMobileArtifacts(root: string, initOptions: InitOptions, buil
   }
 
   if (target_platform === 'ios') {
-    return [];
+    await installIosBuildDependencies();
+    return await buildIosArtifacts(root, buildOptions);
   }
 
   return [];

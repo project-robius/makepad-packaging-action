@@ -34,6 +34,23 @@ async function run(): Promise<void> {
           .filter(Boolean)
       : [];
 
+    const android_abi = getEnvValue('MAKEPAD_ANDROID_ABI') ?? 'aarch64';
+    const android_full_ndk = parseEnvBool(getEnvValue('MAKEPAD_ANDROID_FULL_NDK'));
+    const android_variant = getEnvValue('MAKEPAD_ANDROID_VARIANT') ?? 'default';
+
+    const ios_org = getEnvValue('MAKEPAD_IOS_ORG');
+    const ios_app = getEnvValue('MAKEPAD_IOS_APP');
+    const ios_profile = getEnvValue('MAKEPAD_IOS_PROFILE');
+    const ios_cert = getEnvValue('MAKEPAD_IOS_CERT');
+    const ios_sim = parseEnvBool(getEnvValue('MAKEPAD_IOS_SIM') ?? 'false');
+    const ios_create_ipa = parseEnvBool(getEnvValue('MAKEPAD_IOS_CREATE_IPA') ?? 'false');
+
+    const apple_certificate = getEnvValue('APPLE_CERTIFICATE');
+    const apple_certificate_password = getEnvValue('APPLE_CERTIFICATE_PASSWORD');
+    const apple_provisioning_profile = getEnvValue('APPLE_PROVISIONING_PROFILE');
+    const apple_keychain_password = getEnvValue('APPLE_KEYCHAIN_PASSWORD');
+    const apple_signing_identity = getEnvValue('APPLE_SIGNING_IDENTITY');
+
     const tag_name_input = normalizeInput(core.getInput('tagName'));
     const release_name_input = normalizeInput(core.getInput('releaseName'));
     const release_body_input = normalizeInput(core.getInput('releaseBody'));
@@ -45,6 +62,20 @@ async function run(): Promise<void> {
       args,
       packager_args: packager_args.length ? packager_args : undefined,
       packager_formats: packager_formats.length ? packager_formats : undefined,
+      android_abi: android_abi as BuildOptions['android_abi'],
+      android_full_ndk,
+      android_variant: android_variant as BuildOptions['android_variant'],
+      ios_org,
+      ios_app,
+      ios_profile,
+      ios_cert,
+      ios_sim,
+      ios_create_ipa,
+      apple_certificate,
+      apple_certificate_password,
+      apple_provisioning_profile,
+      apple_keychain_password,
+      apple_signing_identity,
     };
 
     const init_options: InitOptions = {
@@ -143,9 +174,20 @@ async function run(): Promise<void> {
 
 await run();
 
-function normalizeInput(value: string): string | undefined {
+function normalizeInput(value?: string): string | undefined {
+  if (value === undefined) return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getEnvValue(name: string): string | undefined {
+  return normalizeInput(process.env[name]);
+}
+
+function parseEnvBool(value?: string): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes';
 }
 
 function replaceVersion(input: string, version?: string): string {
