@@ -53,20 +53,54 @@ These inputs are already defined in `action.yaml`:
 - `include_release`: include release build (default: `true`)
 - `include_debug`: include debug build (default: `false`)
 
+### Environment variables (current)
+
+Mobile and signing configuration is provided via env vars only:
+
+- `MAKEPAD_ANDROID_ABI`: Android ABI override (`x86_64`, `aarch64`, `armv7`, `i686`), default `aarch64`
+- `MAKEPAD_ANDROID_FULL_NDK`: install full Android NDK (`true`/`false`), default `false`
+- `MAKEPAD_ANDROID_VARIANT`: Android build variant (`default`, `quest`), default `default`
+
+- `MAKEPAD_IOS_ORG`: iOS org identifier (e.g. `com.example`)
+- `MAKEPAD_IOS_APP`: iOS app name
+- `MAKEPAD_IOS_PROFILE`: provisioning profile UUID or path (optional, auto-derived when Apple envs are set)
+- `MAKEPAD_IOS_CERT`: signing certificate fingerprint (optional, auto-derived when Apple envs are set)
+- `MAKEPAD_IOS_SIM`: build for iOS simulator (`true`/`false`), default `false`
+- `MAKEPAD_IOS_CREATE_IPA`: create IPA from .app bundle (`true`/`false`), default `false`
+- `APPLE_CERTIFICATE`: base64-encoded Apple signing certificate (.p12)
+- `APPLE_CERTIFICATE_PASSWORD`: password for the certificate
+- `APPLE_PROVISIONING_PROFILE`: base64-encoded provisioning profile (.mobileprovision)
+- `APPLE_KEYCHAIN_PASSWORD`: password for the temporary keychain
+- `APPLE_SIGNING_IDENTITY`: signing identity common name used to locate the certificate (default: `Apple Distribution`)
+
+### iOS (cargo-makepad) reference
+
+Common commands used by the action:
+
+```bash
+# Install toolchain
+cargo makepad apple ios install-toolchain
+
+# Run on simulator
+cargo makepad apple ios --org=org.example --app=MyApp run-sim -p my-app --release
+
+# Run on device (requires provisioning profile)
+cargo makepad apple ios --org=org.example --app=MyApp run-device -p my-app --release
+
+# List certificates/profiles/devices
+cargo makepad apple list
+```
+
+iOS device builds require a provisioning profile. Create an empty app in Xcode with the
+same organization and product names you plan to use (no spaces or unusual characters),
+then run it on a real device at least once so the profile is generated. Use those values
+for `MAKEPAD_IOS_ORG` and `MAKEPAD_IOS_APP`.
+
+If you have multiple signing identities or profiles, set `MAKEPAD_IOS_PROFILE` and
+`MAKEPAD_IOS_CERT` (or provide `APPLE_SIGNING_IDENTITY` so the action can select the right cert).
+The action uses `--device=iPhone` for device builds.
+
 ### Inputs (planned additions)
-
-Android:
-
-- `android_abi`: `x86_64` | `aarch64` | `armv7` | `i686` | `all`
-- `android_full_ndk`: `true`/`false`
-- `android_variant`: `default` | `quest`
-
-iOS:
-
-- `ios_profile`: provisioning profile UUID or path
-- `ios_cert`: signing cert fingerprint
-- `ios_device`: device name (for `run-device`)
-- `ios_sim`: `true`/`false` for simulator build
 
 Web:
 
@@ -91,6 +125,22 @@ Web:
 
 When `tagName` or `releaseName` contains `__VERSION__`, it is replaced with the resolved app version.
 
+### iOS signing convenience
+
+For iOS device builds, supply certificate and provisioning profile via env vars.
+When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will install and extract them.
+
+```yaml
+- uses: tyreseluo/makepad-packaging-action@main
+  env:
+    APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+    APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+    APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+    APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+  with:
+    args: --target aarch64-apple-ios
+```
+
 ### Example: matrix release (tauri-style)
 
 ```yaml
@@ -112,13 +162,12 @@ When `tagName` or `releaseName` contains `__VERSION__`, it is replaced with the 
 - uses: tyreseluo/makepad-packaging-action@v1
   with:
     args: --target aarch64-linux-android
-    android_abi: aarch64
 ```
 
 ### Current implementation status
 
 - Desktop packaging: implemented (cargo-packager)
 - Android packaging: implemented (APK build)
-- iOS packaging: placeholder only
+- iOS packaging: implemented (app bundle, optional IPA)
 - Web packaging: not implemented yet
 - Release upload: implemented

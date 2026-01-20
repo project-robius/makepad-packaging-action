@@ -33,8 +33,12 @@ export function getTargetInfo(triple?: string): TargetInfo {
     }
 
     if (triple.includes('-')) {
-      // cargo target triples always start with arch and only x86_64 and aarch64 are supported.
+      // cargo target triples always start with arch.
       arch = triple.split('-')[0] as TargetArch;
+      const supported_arches: TargetArch[] = ['x86_64', 'aarch64', 'armv7', 'i686'];
+      if (!supported_arches.includes(arch)) {
+        throw new Error(`Unsupported target architecture: ${arch}`);
+      }
     } else {
       throw new Error(`Invalid target triple: ${triple}`);
     }

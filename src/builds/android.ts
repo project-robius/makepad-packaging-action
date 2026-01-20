@@ -1,19 +1,10 @@
 import { join } from "path";
-import type { Artifact, BuildOptions, InitOptions, MobileTarget, TargetArch } from "../types";
+import type { AndroidABI, AndroidVariant, Artifact, BuildOptions, TargetArch } from "../types";
 import { execCommand, retry } from "../utils";
-
-export type AndroidABI = 
-  | 'all'
-  | 'x86_64'
-  | 'aarch64'
-  | 'armv7'
-  | 'i686';
 
 export type AndroidHostOs = 'windows_x64' | 'macos_x64' | 'macos_aarch64' | 'linux_x64';
 
 // 'default' is the standard Android build variant, 'quest' is for Oculus Quest (now Meta Quest) VR devices
-export type AndroidVariant = 'default' | 'quest';
-
 export interface AndroidBuildOptions {
   abi: AndroidABI;
   package_name: string;
@@ -32,14 +23,25 @@ export interface AndroidPackagingConfig {
   main_binary_name: string; // e.g., makepad_app
 }
 
-export async function installAndroidBuildDependencies(abi: AndroidABI) {
+export async function installAndroidBuildDependencies(abi: AndroidABI, fullNdk: boolean = false) {
   console.log(`🔧 Installing Android build dependencies for ABI: ${abi}...`);
   let installed = false;
 
   await retry(async () => {
+    const args = [
+      'makepad',
+      'android',
+      `--abi=${abi}`,
+      'install-toolchain',
+    ];
+
+    if (fullNdk) {
+      args.push('--full-ndk');
+    }
+
     const { matched } = await execCommand(
         'cargo',
-        ['makepad', 'android', `--abi=${abi}`, 'install-toolchain'],
+        args,
         {
           captureOutput: true,
           keyword: 'Android toolchain has been installed',
@@ -71,17 +73,24 @@ export async function buildAndroidArtifacts(
 ): Promise<Artifact[]> {
   console.log('Building Android artifacts...');
 
-  const { target_info: { arch }, app_name, app_version, identifier, main_binary_name, mode } = buildOptions as {
+  const { target_info: { arch }, app_name, app_version, identifier, main_binary_name, mode, android_abi, android_variant } = buildOptions as {
     target_info: { arch: TargetArch };
     app_name: string;
     app_version: string;
     identifier: string;
     main_binary_name: string;
     mode: 'debug' | 'release';
+    android_abi?: AndroidABI;
+    android_variant?: AndroidVariant;
   };
 
+  const resolved_abi = resolveAndroidAbi(android_abi, arch);
+  const variant_arg = android_variant && android_variant !== 'default'
+    ? [`--variant=${android_variant}`]
+    : [];
+
   // root/target/makepad-android-apk/<main_binary_name>/apk/
-  const apk_prefix = `${app_name}_v${app_version}_${arch}`;
+  const apk_prefix = `${app_name}_v${app_version}_${resolved_abi}`;
   let apk_build_path = join(root, 'target', 'makepad-android-apk', main_binary_name, 'apk');
 
   if (mode === 'debug') {
@@ -91,9 +100,10 @@ export async function buildAndroidArtifacts(
     await execCommand('cargo', [
       'makepad',
       'android',
-      '--abi=' + (arch === 'x86_64' ? 'x86_64' : 'aarch64'),
+      `--abi=${resolved_abi}`,
       '--package-name=' + identifier,
       '--app-label=' + `${apk_prefix}_debug`,
+      ...variant_arg,
       'build',
       '-p',
       main_binary_name,
@@ -104,7 +114,7 @@ export async function buildAndroidArtifacts(
       mode: 'debug',
       version: app_version,
       platform: 'android',
-      arch,
+      arch: resolved_abi,
     }]
   } else {
     console.log(' ⚙️  Building Android release APK...');
@@ -112,9 +122,10 @@ export async function buildAndroidArtifacts(
     await execCommand('cargo', [
       'makepad',
       'android',
-      '--abi=' + (arch === 'x86_64' ? 'x86_64' : 'aarch64'),
+      `--abi=${resolved_abi}`,
       '--package-name=' + identifier,
       '--app-label=' + apk_prefix,
+      ...variant_arg,
       'build',
       '-p',
       main_binary_name,
@@ -126,7 +137,21 @@ export async function buildAndroidArtifacts(
       mode: 'release',
       version: app_version,
       platform: 'android',
-      arch,
+      arch: resolved_abi,
     }];
   }
+}
+
+function resolveAndroidAbi(requested: AndroidABI | undefined, arch: TargetArch): Exclude<AndroidABI, 'all'> {
+  if (requested === 'all') {
+    throw new Error('android_abi=all is not supported by this action.');
+  }
+
+  const resolved = (requested ?? arch) as Exclude<AndroidABI, 'all'>;
+  const allowed: Exclude<AndroidABI, 'all'>[] = ['x86_64', 'aarch64', 'armv7', 'i686'];
+  if (!allowed.includes(resolved)) {
+    throw new Error(`Unsupported Android ABI: ${resolved}`);
+  }
+
+  return resolved;
 }
