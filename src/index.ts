@@ -1,8 +1,11 @@
 import * as core from '@actions/core';
+import * as github from '@actions/github';
 import stringArgv from 'string-argv';
-import type { Artifact, BuildOptions, InitOptions } from './types';
+import type { Artifact, BuildOptions, InitOptions, ManifestToml } from './types';
 import { buildProject } from './build';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { parse_manifest_toml } from './utils';
 
 
 async function run(): Promise<void> {
@@ -22,8 +25,26 @@ async function run(): Promise<void> {
 
     const identifier = core.getInput('identifier');
 
+    const packager_args = stringArgv(core.getInput('packager_args'));
+    const packager_formats_input = core.getInput('packager_formats');
+    const packager_formats = packager_formats_input
+      ? packager_formats_input
+          .split(',')
+          .map((format) => format.trim())
+          .filter(Boolean)
+      : [];
+
+    const tag_name_input = core.getInput('tagName');
+    const release_name_input = core.getInput('releaseName');
+    const release_body_input = core.getInput('releaseBody');
+    const release_draft = core.getBooleanInput('releaseDraft');
+    const prerelease = core.getBooleanInput('prerelease');
+    const github_token = core.getInput('github_token') || process.env.GITHUB_TOKEN || '';
+
     const build_options: BuildOptions = {
       args,
+      packager_args: packager_args.length ? packager_args : undefined,
+      packager_formats: packager_formats.length ? packager_formats : undefined,
     };
 
     const init_options: InitOptions = {
@@ -31,6 +52,10 @@ async function run(): Promise<void> {
       app_name,
       app_version,
     };
+
+    const manifest = parse_manifest_toml(projectPath) as ManifestToml | null;
+    const resolved_app_name = app_name || manifest?.package?.name;
+    const resolved_app_version = app_version || manifest?.package?.version;
 
 
     const release_artifacts: Artifact[] = [];
@@ -60,6 +85,49 @@ async function run(): Promise<void> {
 
     const artifacts = release_artifacts.concat(debug_artifacts);
 
+    if (resolved_app_name) {
+      core.setOutput('app_name', resolved_app_name);
+    }
+    if (resolved_app_version) {
+      core.setOutput('app_version', resolved_app_version);
+    }
+    core.setOutput('artifacts', JSON.stringify(artifacts));
+
+    if (!tag_name_input && (release_name_input || release_body_input)) {
+      core.warning('Release inputs provided without tagName; release upload skipped.');
+    }
+
+    if (tag_name_input) {
+      if (!github_token) {
+        throw new Error('GITHUB_TOKEN (or github_token input) is required for release upload.');
+      }
+
+      const resolved_tag = replaceVersion(tag_name_input, resolved_app_version);
+    const resolved_release_name = release_name_input
+      ? replaceVersion(release_name_input, resolved_app_version)
+      : undefined;
+    const release_body = release_body_input || undefined;
+
+      const release = await ensureRelease({
+        token: github_token,
+        tagName: resolved_tag,
+        releaseName: resolved_release_name,
+        releaseBody: release_body,
+        draft: release_draft,
+        prerelease,
+      });
+
+      core.setOutput('release_url', release.html_url);
+
+      if (artifacts.length > 0) {
+        await uploadReleaseAssets({
+          token: github_token,
+          releaseId: release.id,
+          artifacts,
+        });
+      }
+    }
+
     if (artifacts.length === 0) {
       console.log('No artifacts were built.');
       return;
@@ -74,3 +142,113 @@ async function run(): Promise<void> {
 }
 
 await run();
+
+function replaceVersion(input: string, version?: string): string {
+  if (!version) return input;
+  return input.replace(/__VERSION__/g, version);
+}
+
+async function ensureRelease(params: {
+  token: string;
+  tagName: string;
+  releaseName?: string;
+  releaseBody?: string;
+  draft: boolean;
+  prerelease: boolean;
+}): Promise<{ id: number; html_url: string }> {
+  const { token, tagName, releaseName, releaseBody, draft, prerelease } = params;
+  const octokit = github.getOctokit(token);
+  const { owner, repo } = github.context.repo;
+
+  try {
+    const existing = await octokit.rest.repos.getReleaseByTag({
+      owner,
+      repo,
+      tag: tagName,
+    });
+
+    const shouldUpdate = Boolean(releaseName || releaseBody);
+    if (!shouldUpdate) {
+      return { id: existing.data.id, html_url: existing.data.html_url };
+    }
+
+    const updated = await octokit.rest.repos.updateRelease({
+      owner,
+      repo,
+      release_id: existing.data.id,
+      name: releaseName || existing.data.name || tagName,
+      body: releaseBody ?? existing.data.body ?? undefined,
+      draft: existing.data.draft,
+      prerelease: existing.data.prerelease,
+    });
+
+    return { id: updated.data.id, html_url: updated.data.html_url };
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status !== 404) {
+      throw error;
+    }
+
+    const created = await octokit.rest.repos.createRelease({
+      owner,
+      repo,
+      tag_name: tagName,
+      name: releaseName || tagName,
+      body: releaseBody,
+      draft,
+      prerelease,
+    });
+
+    return { id: created.data.id, html_url: created.data.html_url };
+  }
+}
+
+async function uploadReleaseAssets(params: {
+  token: string;
+  releaseId: number;
+  artifacts: Artifact[];
+}): Promise<void> {
+  const { token, releaseId, artifacts } = params;
+  const octokit = github.getOctokit(token);
+  const { owner, repo } = github.context.repo;
+
+  const existingAssets = await octokit.rest.repos.listReleaseAssets({
+    owner,
+    repo,
+    release_id: releaseId,
+    per_page: 100,
+  });
+  const existingByName = new Map(
+    existingAssets.data.map((asset) => [asset.name, asset.id]),
+  );
+
+  for (const artifact of artifacts) {
+    if (!existsSync(artifact.path)) {
+      core.warning(`Artifact not found on disk: ${artifact.path}`);
+      continue;
+    }
+
+    const assetName = basename(artifact.path);
+    const existingId = existingByName.get(assetName);
+    if (existingId) {
+      await octokit.rest.repos.deleteReleaseAsset({
+        owner,
+        repo,
+        asset_id: existingId,
+      });
+    }
+
+    const stat = statSync(artifact.path);
+    await octokit.rest.repos.uploadReleaseAsset({
+      owner,
+      repo,
+      release_id: releaseId,
+      name: assetName,
+      data: createReadStream(artifact.path) as unknown as string,
+      headers: {
+        'content-type': 'application/octet-stream',
+        'content-length': stat.size,
+      },
+    });
+  }
+}

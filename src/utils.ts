@@ -174,7 +174,7 @@ export function isCommandAvailable(command: string): { installed: boolean; path?
 export function execCommand(
   cmd: string,
   args: string[] = [],
-  options: { captureOutput?: boolean; keyword?: string } = {}
+  options: { captureOutput?: boolean; keyword?: string; cwd?: string } = {}
 ): Promise<{ code: number; output: string; matched: boolean }> {
   return new Promise((resolve, reject) => {
     let output = '';
@@ -183,6 +183,7 @@ export function execCommand(
     const child = spawn(cmd, args, {
       shell: true,
       stdio: ['inherit', 'pipe', 'pipe'],
+      cwd: options.cwd,
     });
 
     child.stdout.on('data', (data) => {

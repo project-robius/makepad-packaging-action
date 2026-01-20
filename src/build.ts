@@ -1,7 +1,9 @@
+import { existsSync, readdirSync } from "fs";
+import { isAbsolute, join } from "path";
 import { buildAndroidArtifacts, installAndroidBuildDependencies } from "./builds/android";
 import { PackagingConfig } from "./config";
-import type { Artifact, BuildOptions, InitOptions, MobileTarget, TargetArch, TargetInfo } from "./types";
-import { execCommand, getTargetInfo, isCommandAvailable, retry } from "./utils";
+import type { Artifact, BuildOptions, InitOptions, MobileTarget, TargetArch } from "./types";
+import { execCommand, getTargetInfo, isCommandAvailable, parse_manifest_toml, retry } from "./utils";
 
 export async function buildProject(
   root: string,
@@ -33,6 +35,7 @@ export async function buildProject(
 
   buildOptions = { 
     ...buildOptions, 
+    args,
     target_info, 
     mode: debug ? 'debug' : 'release',
   };
@@ -42,7 +45,7 @@ export async function buildProject(
   const target_platform_type = target_info.type;
   if (target_platform_type === 'desktop') {
     // Desktop build logic
-    return await buildDesktopArtifacts();
+    return await buildDesktopArtifacts(root, initOptions, buildOptions);
   } else if (target_platform_type === 'mobile') {
     // Check and install mobile packaging tools.
     await checkAndInstallMobilePackagingTools();
@@ -57,6 +60,73 @@ interface MobilePackagingToolsInfo {
     installed: boolean;
     path?: string | undefined;
   }
+}
+
+interface DesktopPackagingToolsInfo {
+  cargo_packager_info: {
+    installed: boolean;
+    path?: string | undefined;
+  };
+  robius_packaging_commands_info: {
+    installed: boolean;
+    path?: string | undefined;
+  };
+}
+
+async function ensureCargoToolInstalled(
+  command: string,
+  label: string,
+  installArgs: string[],
+): Promise<{ installed: boolean; path?: string }> {
+  const { installed, path } = isCommandAvailable(command);
+  if (installed) {
+    console.log(`✅ ${label} already installed.`);
+    return { installed, path };
+  }
+
+  console.log(`⚙️  ${label} not found. Installing...`);
+  await retry(async () => {
+    await execCommand('cargo', installArgs);
+  }, 3, 5000, (attempt, err) => {
+    console.warn(`❌ Attempt ${attempt} to install ${label} failed:`, err);
+    console.log('⏳ Retrying...');
+  });
+
+  const verify = isCommandAvailable(command);
+  if (!verify.installed) {
+    throw new Error(`Failed to install ${label}.`);
+  }
+
+  console.log(`✅ ${label} installed successfully.`);
+  return { installed: verify.installed, path: verify.path };
+}
+
+async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingToolsInfo> {
+  const cargo_packager_info = await ensureCargoToolInstalled(
+    'cargo-packager',
+    'cargo-packager',
+    ['install', '--force', '--locked', 'cargo-packager'],
+  );
+
+  const robius_packaging_commands_info = await ensureCargoToolInstalled(
+    'robius-packaging-commands',
+    'robius-packaging-commands',
+    [
+      'install',
+      '--force',
+      '--locked',
+      '--version',
+      '0.2.0',
+      '--git',
+      'https://github.com/project-robius/robius-packaging-commands.git',
+      'robius-packaging-commands',
+    ],
+  );
+
+  return {
+    cargo_packager_info,
+    robius_packaging_commands_info,
+  };
 }
 
 // Use Makepad official `cargo-makepad` tool for mobile packaging.
@@ -108,9 +178,121 @@ async function checkAndInstallMobilePackagingTools(): Promise<MobilePackagingToo
   return packaging_tools_info;
 }
 
-async function buildDesktopArtifacts(): Promise<Artifact[]> {
+function resolveDesktopDefaults(
+  root: string,
+  initOptions: InitOptions,
+): { app_name: string; app_version: string; out_dir: string } {
+  const manifest = parse_manifest_toml(root) as Record<string, any> | null;
+  if (!manifest || !manifest.package) {
+    throw new Error('Failed to read Cargo.toml package metadata.');
+  }
+
+  const app_name = initOptions.app_name ?? manifest.package.name;
+  const app_version = initOptions.app_version ?? manifest.package.version;
+
+  if (!app_name || !app_version) {
+    throw new Error('Missing app name or version from Cargo.toml.');
+  }
+
+  const out_dir = resolvePackagerOutDir(root, manifest);
+
+  return { app_name, app_version, out_dir };
+}
+
+function resolvePackagerOutDir(
+  root: string,
+  manifest: Record<string, any>,
+): string {
+  const out_dir = manifest?.package?.metadata?.packager?.out_dir;
+  if (typeof out_dir === 'string' && out_dir.trim().length > 0) {
+    return isAbsolute(out_dir) ? out_dir : join(root, out_dir);
+  }
+
+  return join(root, 'dist');
+}
+
+function isDesktopArtifactFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  const suffixes = [
+    '.deb',
+    '.rpm',
+    '.appimage',
+    '.dmg',
+    '.pkg',
+    '.exe',
+    '.msi',
+    '.tar.gz',
+    '.zip',
+  ];
+
+  return suffixes.some((suffix) => lower.endsWith(suffix));
+}
+
+function collectDesktopArtifacts(
+  outDir: string,
+  mode: 'debug' | 'release',
+  version: string,
+  platform: Artifact['platform'],
+  arch: Artifact['arch'],
+): Artifact[] {
+  if (!existsSync(outDir)) {
+    console.warn(`⚠️  Packaging output directory not found: ${outDir}`);
+    return [];
+  }
+
+  const artifacts: Artifact[] = [];
+  for (const entry of readdirSync(outDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    if (!isDesktopArtifactFile(entry.name)) continue;
+    artifacts.push({
+      path: join(outDir, entry.name),
+      mode,
+      version,
+      platform,
+      arch,
+    });
+  }
+
+  return artifacts;
+}
+
+async function buildDesktopArtifacts(
+  root: string,
+  initOptions: InitOptions,
+  buildOptions: BuildOptions,
+): Promise<Artifact[]> {
   console.log('Building for desktop...');
-  return [];
+
+  await checkAndInstallDesktopPackagingTools();
+
+  const { app_version, out_dir } = resolveDesktopDefaults(root, initOptions);
+  const target_info = buildOptions.target_info ?? getTargetInfo();
+  const args = buildOptions.args ?? [];
+  const packager_args = buildOptions.packager_args ?? [];
+  const packager_formats = buildOptions.packager_formats ?? [];
+
+  const packager_cli_args = [...args, ...packager_args];
+  const has_formats_arg = packager_cli_args.some((arg) => arg.startsWith('--formats'));
+  if (packager_formats.length > 0 && !has_formats_arg) {
+    packager_cli_args.push('--formats', packager_formats.join(','));
+  }
+
+  await execCommand('cargo', ['packager', ...packager_cli_args], { cwd: root });
+
+  const mode = buildOptions.mode ?? 'release';
+  const artifacts = collectDesktopArtifacts(
+    out_dir,
+    mode,
+    app_version,
+    target_info.target_platform,
+    target_info.arch,
+  );
+
+  if (artifacts.length === 0) {
+    console.warn(`⚠️  No desktop artifacts found in ${out_dir}`);
+  }
+
+  return artifacts;
 }
 
 async function buildMobileArtifacts(root: string, initOptions: InitOptions, buildOptions: BuildOptions): Promise<Artifact[]> {

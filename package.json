@@ -12,7 +12,7 @@
   ],
   "author": "",
   "license": "MIT",
-  "packageManager": "pnpm@10.18.1",
+  "packageManager": "bun@1.1.30",
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/github": "^6.0.1",
