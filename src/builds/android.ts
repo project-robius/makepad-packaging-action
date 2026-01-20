@@ -97,12 +97,14 @@ export async function buildAndroidArtifacts(
       'build',
       '-p',
       main_binary_name,
-    ]);
+    ], { cwd: root });
 
     return [{
       path: join(apk_build_path, `${apk_prefix}_debug.apk`),
       mode: 'debug',
       version: app_version,
+      platform: 'android',
+      arch,
     }]
   } else {
     console.log(' ⚙️  Building Android release APK...');
@@ -117,12 +119,14 @@ export async function buildAndroidArtifacts(
       '-p',
       main_binary_name,
       '--release',
-    ]);
+    ], { cwd: root });
 
     return [{
       path: join(apk_build_path, `${apk_prefix}.apk`),
       mode: 'release',
       version: app_version,
+      platform: 'android',
+      arch,
     }];
   }
 }

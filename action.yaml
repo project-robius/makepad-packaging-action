@@ -9,6 +9,32 @@ inputs:
   args:
     description: 'Arguments for the `cargo build <args>` and `cargo makepad <args>` commands. For example, `--release --target x86_64-pc-windows-msvc`.'
 
+  packager_formats:
+    description: 'Comma-separated formats for `cargo packager` (e.g., deb,dmg,nsis).'
+
+  packager_args:
+    description: 'Extra arguments passed only to `cargo packager` (e.g., `--verbose`).'
+
+  tagName:
+    description: 'GitHub Release tag name. Supports `__VERSION__` placeholder.'
+
+  releaseName:
+    description: 'GitHub Release name. Supports `__VERSION__` placeholder.'
+
+  releaseBody:
+    description: 'GitHub Release body markdown.'
+
+  releaseDraft:
+    description: 'Create the release as a draft.'
+    default: 'false'
+
+  prerelease:
+    description: 'Mark the release as a prerelease.'
+    default: 'false'
+
+  github_token:
+    description: 'GitHub token for creating releases and uploading assets. Defaults to env GITHUB_TOKEN.'
+
   app_name:
     description: 'The name of the makepad app. If not provided, Mobile will be inferred from `Cargo.toml` name field, Desktop will be inferred from `cargo-packager` product_name field.'
 
@@ -29,6 +55,16 @@ inputs:
   include_debug:
     description: 'Whether to include the debug build (default: false)'
     default: 'false'
+
+outputs:
+  artifacts:
+    description: 'JSON array of artifacts built by the action.'
+  app_name:
+    description: 'Resolved app name.'
+  app_version:
+    description: 'Resolved app version.'
+  release_url:
+    description: 'GitHub Release URL (if created).'
 
 runs:
   using: 'node20'

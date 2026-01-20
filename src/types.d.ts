@@ -13,6 +13,8 @@ export interface BuildOptions {
   app_version?: string;
   identifier?: string;
   main_binary_name?: string;
+  packager_args?: string[];
+  packager_formats?: string[];
 }
 
 export interface InitOptions {
@@ -26,6 +28,8 @@ export interface Artifact {
   path: string;
   mode: 'debug' | 'release';
   version: string;
+  platform: TargetPlatform;
+  arch: TargetArch;
 }
 
 export type MobileTarget = 'ios' | 'android';
