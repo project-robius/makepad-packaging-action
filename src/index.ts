@@ -18,12 +18,12 @@ async function run(): Promise<void> {
 
     const args = stringArgv(core.getInput('args'));
 
-    const app_name = core.getInput('app_name');
-    const app_version = core.getInput('app_version');
+    const app_name = normalizeInput(core.getInput('app_name'));
+    const app_version = normalizeInput(core.getInput('app_version'));
     const include_debug = core.getBooleanInput('include_debug'); // default: false
     const include_release = core.getBooleanInput('include_release'); // default: true
 
-    const identifier = core.getInput('identifier');
+    const identifier = normalizeInput(core.getInput('identifier'));
 
     const packager_args = stringArgv(core.getInput('packager_args'));
     const packager_formats_input = core.getInput('packager_formats');
@@ -34,12 +34,12 @@ async function run(): Promise<void> {
           .filter(Boolean)
       : [];
 
-    const tag_name_input = core.getInput('tagName');
-    const release_name_input = core.getInput('releaseName');
-    const release_body_input = core.getInput('releaseBody');
+    const tag_name_input = normalizeInput(core.getInput('tagName'));
+    const release_name_input = normalizeInput(core.getInput('releaseName'));
+    const release_body_input = normalizeInput(core.getInput('releaseBody'));
     const release_draft = core.getBooleanInput('releaseDraft');
     const prerelease = core.getBooleanInput('prerelease');
-    const github_token = core.getInput('github_token') || process.env.GITHUB_TOKEN || '';
+    const github_token = normalizeInput(core.getInput('github_token')) || process.env.GITHUB_TOKEN || '';
 
     const build_options: BuildOptions = {
       args,
@@ -103,10 +103,10 @@ async function run(): Promise<void> {
       }
 
       const resolved_tag = replaceVersion(tag_name_input, resolved_app_version);
-    const resolved_release_name = release_name_input
-      ? replaceVersion(release_name_input, resolved_app_version)
-      : undefined;
-    const release_body = release_body_input || undefined;
+      const resolved_release_name = release_name_input
+        ? replaceVersion(release_name_input, resolved_app_version)
+        : undefined;
+      const release_body = release_body_input || undefined;
 
       const release = await ensureRelease({
         token: github_token,
@@ -142,6 +142,11 @@ async function run(): Promise<void> {
 }
 
 await run();
+
+function normalizeInput(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
 function replaceVersion(input: string, version?: string): string {
   if (!version) return input;
