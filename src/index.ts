@@ -5,7 +5,7 @@ import type { Artifact, BuildOptions, InitOptions, ManifestToml } from './types'
 import { buildProject } from './build';
 import { basename, resolve } from 'node:path';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { parse_manifest_toml } from './utils';
+import { parse_manifest_toml, retry } from './utils';
 
 
 async function run(): Promise<void> {
@@ -207,35 +207,51 @@ async function ensureRelease(params: {
   const octokit = github.getOctokit(token);
   const { owner, repo } = github.context.repo;
 
-  try {
-    const existing = await octokit.rest.repos.getReleaseByTag({
-      owner,
-      repo,
-      tag: tagName,
-    });
+  const getReleaseByTag = async (): Promise<{ id: number; html_url: string; name?: string | null; body?: string | null; draft?: boolean; prerelease?: boolean } | null> => {
+    try {
+      const existing = await octokit.rest.repos.getReleaseByTag({
+        owner,
+        repo,
+        tag: tagName,
+      });
+      return {
+        id: existing.data.id,
+        html_url: existing.data.html_url,
+        name: existing.data.name,
+        body: existing.data.body,
+        draft: existing.data.draft,
+        prerelease: existing.data.prerelease,
+      };
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      if (status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  };
 
+  const existing = await getReleaseByTag();
+  if (existing) {
     const shouldUpdate = Boolean(releaseName || releaseBody);
     if (!shouldUpdate) {
-      return { id: existing.data.id, html_url: existing.data.html_url };
+      return { id: existing.id, html_url: existing.html_url };
     }
 
     const updated = await octokit.rest.repos.updateRelease({
       owner,
       repo,
-      release_id: existing.data.id,
-      name: releaseName || existing.data.name || tagName,
-      body: releaseBody ?? existing.data.body ?? undefined,
-      draft: existing.data.draft,
-      prerelease: existing.data.prerelease,
+      release_id: existing.id,
+      name: releaseName || existing.name || tagName,
+      body: releaseBody ?? existing.body ?? undefined,
+      draft: existing.draft,
+      prerelease: existing.prerelease,
     });
 
     return { id: updated.data.id, html_url: updated.data.html_url };
-  } catch (error) {
-    const status = (error as { status?: number }).status;
-    if (status !== 404) {
-      throw error;
-    }
+  }
 
+  try {
     const created = await octokit.rest.repos.createRelease({
       owner,
       repo,
@@ -247,6 +263,19 @@ async function ensureRelease(params: {
     });
 
     return { id: created.data.id, html_url: created.data.html_url };
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status === 422) {
+      const resolved = await retry(async () => {
+        const release = await getReleaseByTag();
+        if (!release) {
+          throw new Error('Release not visible yet.');
+        }
+        return release;
+      }, 3, 1000);
+      return { id: resolved.id, html_url: resolved.html_url };
+    }
+    throw error;
   }
 }
 
