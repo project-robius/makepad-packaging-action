@@ -7,6 +7,19 @@ import { basename, resolve } from 'node:path';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { parse_manifest_toml, retry } from './utils';
 
+type Octokit = ReturnType<typeof github.getOctokit>;
+
+type ReleaseSummary = {
+  id: number;
+  html_url: string;
+  name?: string | null;
+  body?: string | null;
+  draft?: boolean;
+  prerelease?: boolean;
+  tag_name?: string | null;
+  created_at?: string | null;
+};
+
 
 async function run(): Promise<void> {
   try {
@@ -153,7 +166,11 @@ async function run(): Promise<void> {
         throw new Error('GITHUB_TOKEN (or github_token input) is required for release upload.');
       }
 
-      const resolved_tag = replaceVersion(tag_name_input, resolved_app_version);
+      const resolved_tag_raw = replaceVersion(tag_name_input, resolved_app_version);
+      const resolved_tag = normalizeTagName(resolved_tag_raw);
+      if (resolved_tag !== resolved_tag_raw) {
+        core.info(`Normalized tagName from "${resolved_tag_raw}" to "${resolved_tag}".`);
+      }
       const resolved_release_name = release_name_input
         ? replaceVersion(release_name_input, resolved_app_version)
         : undefined;
@@ -177,6 +194,12 @@ async function run(): Promise<void> {
           artifacts,
         });
       }
+
+      await cleanupDuplicateReleases({
+        token: github_token,
+        tagName: resolved_tag,
+        keepReleaseId: release.id,
+      });
     }
 
     if (artifacts.length === 0) {
@@ -215,39 +238,32 @@ function replaceVersion(input: string, version?: string): string {
   return input.replace(/__VERSION__/g, version);
 }
 
-async function ensureRelease(params: {
-  token: string;
-  tagName: string;
-  releaseName?: string;
-  releaseBody?: string;
-  draft: boolean;
-  prerelease: boolean;
-}): Promise<{ id: number; html_url: string }> {
-  const { token, tagName, releaseName, releaseBody, draft, prerelease } = params;
-  const octokit = github.getOctokit(token);
-  const { owner, repo } = github.context.repo;
+function normalizeTagName(tagName: string): string {
+  const trimmed = tagName.trim();
+  if (trimmed.startsWith('refs/tags/')) {
+    return trimmed.slice('refs/tags/'.length);
+  }
+  if (trimmed.startsWith('tags/')) {
+    return trimmed.slice('tags/'.length);
+  }
+  return trimmed;
+}
 
-  type ReleaseSummary = {
-    id: number;
-    html_url: string;
-    name?: string | null;
-    body?: string | null;
-    draft?: boolean;
-    prerelease?: boolean;
-    tag_name?: string | null;
-    created_at?: string | null;
-  };
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  const mapRelease = (release: {
-    id: number;
-    html_url: string;
-    name?: string | null;
-    body?: string | null;
-    draft?: boolean;
-    prerelease?: boolean;
-    tag_name?: string | null;
-    created_at?: string | null;
-  }): ReleaseSummary => ({
+function mapRelease(release: {
+  id: number;
+  html_url: string;
+  name?: string | null;
+  body?: string | null;
+  draft?: boolean;
+  prerelease?: boolean;
+  tag_name?: string | null;
+  created_at?: string | null;
+}): ReleaseSummary {
+  return {
     id: release.id,
     html_url: release.html_url,
     name: release.name,
@@ -256,59 +272,141 @@ async function ensureRelease(params: {
     prerelease: release.prerelease,
     tag_name: release.tag_name,
     created_at: release.created_at,
-  });
-
-  const getReleaseByTag = async (): Promise<ReleaseSummary | null> => {
-    try {
-      const existing = await octokit.rest.repos.getReleaseByTag({
-        owner,
-        repo,
-        tag: tagName,
-      });
-      return mapRelease(existing.data);
-    } catch (error) {
-      const status = (error as { status?: number }).status;
-      if (status === 404) {
-        return null;
-      }
-      throw error;
-    }
   };
+}
 
-  const listReleasesByTag = async (): Promise<ReleaseSummary[]> => {
-    const releases = await octokit.paginate(octokit.rest.repos.listReleases, {
+async function getReleaseByTag(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  tagName: string,
+): Promise<ReleaseSummary | null> {
+  try {
+    const existing = await octokit.rest.repos.getReleaseByTag({
       owner,
       repo,
-      per_page: 100,
+      tag: tagName,
     });
-    return releases
-      .filter((release) => release.tag_name === tagName)
-      .map((release) => mapRelease(release));
-  };
-
-  const findReleaseByTag = async (): Promise<ReleaseSummary | null> => {
-    const direct = await getReleaseByTag();
-    if (direct) {
-      return direct;
-    }
-
-    const matches = await listReleasesByTag();
-
-    if (matches.length === 0) {
+    return mapRelease(existing.data);
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
       return null;
     }
+    throw error;
+  }
+}
 
-    if (matches.length > 1) {
-      matches.sort((a, b) => {
-        const aTime = a.created_at ? Date.parse(a.created_at) : 0;
-        const bTime = b.created_at ? Date.parse(b.created_at) : 0;
-        return aTime - bTime;
-      });
-      core.warning(`Multiple releases found for tag ${tagName}; using the earliest one.`);
+async function listReleasesByTag(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  tagName: string,
+): Promise<ReleaseSummary[]> {
+  const releases = await octokit.paginate(octokit.rest.repos.listReleases, {
+    owner,
+    repo,
+    per_page: 100,
+  });
+  return releases
+    .filter((release) => release.tag_name === tagName)
+    .map((release) => mapRelease(release));
+}
+
+function sortByCreatedAt(releases: ReleaseSummary[]): ReleaseSummary[] {
+  return releases.sort((a, b) => {
+    const aTime = a.created_at ? Date.parse(a.created_at) : 0;
+    const bTime = b.created_at ? Date.parse(b.created_at) : 0;
+    return aTime - bTime;
+  });
+}
+
+async function findReleaseByTag(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  tagName: string,
+): Promise<ReleaseSummary | null> {
+  const direct = await getReleaseByTag(octokit, owner, repo, tagName);
+  if (direct) {
+    return direct;
+  }
+
+  const matches = await listReleasesByTag(octokit, owner, repo, tagName);
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  if (matches.length > 1) {
+    core.warning(`Multiple releases found for tag ${tagName}; using the earliest one.`);
+  }
+
+  const sorted = sortByCreatedAt(matches);
+  return sorted[0];
+}
+
+async function resolveCanonicalRelease(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  tagName: string,
+): Promise<{ canonical: ReleaseSummary | null; duplicates: ReleaseSummary[] }> {
+  const matches = await listReleasesByTag(octokit, owner, repo, tagName);
+  if (matches.length === 0) {
+    return { canonical: null, duplicates: [] };
+  }
+
+  const sorted = sortByCreatedAt(matches);
+  return { canonical: sorted[0], duplicates: sorted.slice(1) };
+}
+
+async function resolveCanonicalReleaseWithStabilization(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  tagName: string,
+  attempts: number = 5,
+  delay: number = 1000,
+): Promise<{ canonical: ReleaseSummary | null; duplicates: ReleaseSummary[] }> {
+  let lastKey: string | null = null;
+  let resolved: { canonical: ReleaseSummary | null; duplicates: ReleaseSummary[] } = {
+    canonical: null,
+    duplicates: [],
+  };
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    resolved = await resolveCanonicalRelease(octokit, owner, repo, tagName);
+    const { canonical, duplicates } = resolved;
+
+    if (canonical) {
+      const key = [canonical.id, ...duplicates.map((release) => release.id)].join(',');
+      if (key === lastKey) {
+        return resolved;
+      }
+      lastKey = key;
     }
 
-    return matches[0];
-  };
+    if (attempt < attempts) {
+      await sleep(delay);
+    }
+  }
+
+  return resolved;
+}
+
+async function ensureRelease(params: {
+  token: string;
+  tagName: string;
+  releaseName?: string;
+  releaseBody?: string;
+  draft: boolean;
+  prerelease: boolean;
+}): Promise<{ id: number; html_url: string }> {
+  const { token, tagName: rawTagName, releaseName, releaseBody, draft, prerelease } = params;
+  const tagName = normalizeTagName(rawTagName);
+  const octokit = github.getOctokit(token);
+  const { owner, repo } = github.context.repo;
 
   const ensureTagRef = async (): Promise<'created' | 'exists' | 'skipped'> => {
     const ref = tagName.startsWith('refs/tags/') ? tagName : `refs/tags/${tagName}`;
@@ -342,27 +440,7 @@ async function ensureRelease(params: {
     }
   };
 
-  const sortByCreatedAt = (releases: ReleaseSummary[]): ReleaseSummary[] => {
-    return releases.sort((a, b) => {
-      const aTime = a.created_at ? Date.parse(a.created_at) : 0;
-      const bTime = b.created_at ? Date.parse(b.created_at) : 0;
-      return aTime - bTime;
-    });
-  };
-
-  const resolveCanonicalRelease = async (): Promise<ReleaseSummary | null> => {
-    const matches = await listReleasesByTag();
-    if (matches.length === 0) {
-      return null;
-    }
-    if (matches.length > 1) {
-      core.warning(`Multiple releases found for tag ${tagName}; using the earliest one.`);
-    }
-    const sorted = sortByCreatedAt(matches);
-    return sorted[0];
-  };
-
-  const existing = await findReleaseByTag();
+  const existing = await findReleaseByTag(octokit, owner, repo, tagName);
   if (existing) {
     const shouldUpdate = Boolean(releaseName || releaseBody);
     if (!shouldUpdate) {
@@ -385,7 +463,7 @@ async function ensureRelease(params: {
   const tagLock = await ensureTagRef();
   if (tagLock === 'exists') {
     const waited = await retry(async () => {
-      const release = await findReleaseByTag();
+      const release = await findReleaseByTag(octokit, owner, repo, tagName);
       if (!release) {
         throw new Error('Release not visible yet.');
       }
@@ -412,7 +490,7 @@ async function ensureRelease(params: {
 
   try {
     const maybeExisting = await retry(async () => {
-      const release = await findReleaseByTag();
+      const release = await findReleaseByTag(octokit, owner, repo, tagName);
       if (!release) {
         throw new Error('Release not visible yet.');
       }
@@ -433,15 +511,16 @@ async function ensureRelease(params: {
       prerelease,
     });
 
-    const canonical = await retry(async () => {
-      const resolved = await resolveCanonicalRelease();
-      if (!resolved) {
-        throw new Error('Release not visible yet.');
-      }
-      return resolved;
-    }, 3, 750).catch(() => null);
+    const stabilized = await resolveCanonicalReleaseWithStabilization(
+      octokit,
+      owner,
+      repo,
+      tagName,
+      5,
+      750,
+    );
 
-    if (canonical && canonical.id !== created.data.id) {
+    if (stabilized.canonical && stabilized.canonical.id !== created.data.id) {
       try {
         await octokit.rest.repos.deleteRelease({
           owner,
@@ -452,7 +531,7 @@ async function ensureRelease(params: {
       } catch (deleteError) {
         core.warning(`Failed to delete duplicate release ${created.data.id}: ${(deleteError as Error).message}`);
       }
-      return { id: canonical.id, html_url: canonical.html_url };
+      return { id: stabilized.canonical.id, html_url: stabilized.canonical.html_url };
     }
 
     return { id: created.data.id, html_url: created.data.html_url };
@@ -460,7 +539,7 @@ async function ensureRelease(params: {
     const status = (error as { status?: number }).status;
     if (status === 422) {
       const resolved = await retry(async () => {
-        const release = await findReleaseByTag();
+        const release = await findReleaseByTag(octokit, owner, repo, tagName);
         if (!release) {
           throw new Error('Release not visible yet.');
         }
@@ -469,6 +548,75 @@ async function ensureRelease(params: {
       return { id: resolved.id, html_url: resolved.html_url };
     }
     throw error;
+  }
+}
+
+async function cleanupDuplicateReleases(params: {
+  token: string;
+  tagName: string;
+  keepReleaseId: number;
+}): Promise<void> {
+  const { token, tagName: rawTagName, keepReleaseId } = params;
+  const tagName = normalizeTagName(rawTagName);
+  const octokit = github.getOctokit(token);
+  const { owner, repo } = github.context.repo;
+
+  const matches = await listReleasesByTag(octokit, owner, repo, tagName);
+  if (matches.length <= 1) {
+    return;
+  }
+
+  const sorted = sortByCreatedAt(matches);
+  const keep = sorted.find((release) => release.id === keepReleaseId) ?? sorted[0];
+  if (!keep) {
+    return;
+  }
+
+  if (keep.id !== keepReleaseId) {
+    core.warning(`Release ${keepReleaseId} not found for tag ${tagName}; keeping ${keep.id} as canonical.`);
+  }
+
+  const keepAssets = await octokit.rest.repos.listReleaseAssets({
+    owner,
+    repo,
+    release_id: keep.id,
+    per_page: 100,
+  });
+  const keepAssetNames = new Set(keepAssets.data.map((asset) => asset.name));
+
+  for (const release of sorted) {
+    if (release.id === keep.id) continue;
+
+    const duplicateAssets = await octokit.rest.repos.listReleaseAssets({
+      owner,
+      repo,
+      release_id: release.id,
+      per_page: 100,
+    });
+
+    const extraAssets = duplicateAssets.data.filter(
+      (asset) => !keepAssetNames.has(asset.name),
+    );
+
+    if (extraAssets.length > 0) {
+      core.warning(
+        `Duplicate release ${release.id} for tag ${tagName} has assets not on the canonical release; skipping delete.`,
+      );
+      continue;
+    }
+
+    try {
+      await octokit.rest.repos.deleteRelease({
+        owner,
+        repo,
+        release_id: release.id,
+      });
+      core.info(`Deleted duplicate release ${release.id} for tag ${tagName}.`);
+    } catch (deleteError) {
+      core.warning(
+        `Failed to delete duplicate release ${release.id}: ${(deleteError as Error).message}`,
+      );
+    }
   }
 }
 
