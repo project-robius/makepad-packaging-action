@@ -68,6 +68,7 @@ Mobile and signing configuration is provided via env vars only:
 - `MAKEPAD_IOS_CERT`: signing certificate fingerprint (optional, auto-derived when Apple envs are set)
 - `MAKEPAD_IOS_SIM`: build for iOS simulator (`true`/`false`), default `false`
 - `MAKEPAD_IOS_CREATE_IPA`: create IPA from .app bundle (`true`/`false`), default `false`
+- `MAKEPAD_IOS_UPLOAD_TESTFLIGHT`: upload IPA to TestFlight (`true`/`false`), default `false`
 - `APPLE_CERTIFICATE`: base64-encoded Apple signing certificate (.p12)
 - `APPLE_CERTIFICATE_PASSWORD`: password for the certificate
 - `APPLE_PROVISIONING_PROFILE`: base64-encoded provisioning profile (.mobileprovision)
@@ -113,6 +114,11 @@ for `MAKEPAD_IOS_ORG` and `MAKEPAD_IOS_APP`.
 If you have multiple signing identities or profiles, set `MAKEPAD_IOS_PROFILE` and
 `MAKEPAD_IOS_CERT` (or provide `APPLE_SIGNING_IDENTITY` so the action can select the right cert).
 The action uses `--device=iPhone` for device builds.
+
+To upload to TestFlight, set `MAKEPAD_IOS_UPLOAD_TESTFLIGHT=true` and provide:
+- `APP_STORE_CONNECT_API_KEY` (or `APP_STORE_CONNECT_API_KEY_CONTENT`)
+- `APP_STORE_CONNECT_KEY_ID`
+- `APP_STORE_CONNECT_ISSUER_ID`
 
 ### Outputs
 

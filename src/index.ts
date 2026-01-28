@@ -4,8 +4,8 @@ import stringArgv from 'string-argv';
 import type { Artifact, BuildOptions, InitOptions, ManifestToml, TargetPlatform } from './types';
 import { buildProject } from './build';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { createReadStream, existsSync, mkdtempSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { createReadStream, existsSync, mkdtempSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { execCommand, parse_manifest_toml, retry } from './utils';
 
 type Octokit = ReturnType<typeof github.getOctokit>;
@@ -57,7 +57,13 @@ async function run(): Promise<void> {
     const ios_profile = getEnvValue('MAKEPAD_IOS_PROFILE');
     const ios_cert = getEnvValue('MAKEPAD_IOS_CERT');
     const ios_sim = parseEnvBool(getEnvValue('MAKEPAD_IOS_SIM') ?? 'false');
-    const ios_create_ipa = parseEnvBool(getEnvValue('MAKEPAD_IOS_CREATE_IPA') ?? 'false');
+    let ios_create_ipa = parseEnvBool(getEnvValue('MAKEPAD_IOS_CREATE_IPA') ?? 'false');
+    const ios_upload_testflight = parseEnvBool(getEnvValue('MAKEPAD_IOS_UPLOAD_TESTFLIGHT') ?? 'false');
+    const app_store_connect_api_key =
+      getEnvValue('APP_STORE_CONNECT_API_KEY') ??
+      getEnvValue('APP_STORE_CONNECT_API_KEY_CONTENT');
+    const app_store_connect_key_id = getEnvValue('APP_STORE_CONNECT_KEY_ID');
+    const app_store_connect_issuer_id = getEnvValue('APP_STORE_CONNECT_ISSUER_ID');
 
     const apple_certificate = getEnvValue('APPLE_CERTIFICATE');
     const apple_certificate_password = getEnvValue('APPLE_CERTIFICATE_PASSWORD');
@@ -86,6 +92,21 @@ async function run(): Promise<void> {
     const release_draft = core.getBooleanInput('releaseDraft');
     const prerelease = core.getBooleanInput('prerelease');
     const github_token = normalizeInput(core.getInput('github_token')) || process.env.GITHUB_TOKEN || '';
+
+    if (ios_upload_testflight) {
+      if (ios_sim) {
+        throw new Error('MAKEPAD_IOS_UPLOAD_TESTFLIGHT requires a device build; set MAKEPAD_IOS_SIM=false.');
+      }
+      if (!app_store_connect_api_key || !app_store_connect_key_id || !app_store_connect_issuer_id) {
+        throw new Error(
+          'TestFlight upload requires APP_STORE_CONNECT_API_KEY(_CONTENT), APP_STORE_CONNECT_KEY_ID, and APP_STORE_CONNECT_ISSUER_ID.'
+        );
+      }
+      if (!ios_create_ipa) {
+        ios_create_ipa = true;
+        core.info('MAKEPAD_IOS_UPLOAD_TESTFLIGHT enabled; forcing MAKEPAD_IOS_CREATE_IPA=true.');
+      }
+    }
 
     const has_release_id = Boolean(release_id_input);
     const release_id = has_release_id ? Number(release_id_input) : undefined;
@@ -253,6 +274,15 @@ async function run(): Promise<void> {
       });
     }
 
+    if (ios_upload_testflight) {
+      await uploadToTestFlight({
+        artifacts,
+        apiKey: app_store_connect_api_key as string,
+        keyId: app_store_connect_key_id as string,
+        issuerId: app_store_connect_issuer_id as string,
+      });
+    }
+
     if (artifacts.length === 0) {
       console.log('No artifacts were built.');
       return;
@@ -300,6 +330,55 @@ function normalizeTagName(tagName: string): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function uploadToTestFlight(params: {
+  artifacts: Artifact[];
+  apiKey: string;
+  keyId: string;
+  issuerId: string;
+}): Promise<void> {
+  const { artifacts, apiKey, keyId, issuerId } = params;
+  const ipa = pickIosIpaArtifact(artifacts);
+  if (!ipa) {
+    throw new Error(
+      'TestFlight upload requested but no .ipa artifact was built. Set MAKEPAD_IOS_CREATE_IPA=true and build for device.'
+    );
+  }
+  if (!existsSync(ipa.path) || !statSync(ipa.path).isFile()) {
+    throw new Error(`TestFlight upload failed: IPA not found at ${ipa.path}`);
+  }
+
+  const key_dir = join(homedir(), 'private_keys');
+  mkdirSync(key_dir, { recursive: true });
+  const key_path = join(key_dir, `AuthKey_${keyId}.p8`);
+  writeFileSync(key_path, apiKey);
+
+  core.info(`Uploading ${basename(ipa.path)} to TestFlight...`);
+  await execCommand('xcrun', [
+    'altool',
+    '--upload-app',
+    '--type',
+    'ios',
+    '--file',
+    ipa.path,
+    '--apiKey',
+    keyId,
+    '--apiIssuer',
+    issuerId,
+    '--verbose',
+  ]);
+  core.info('✅ Successfully uploaded to TestFlight!');
+}
+
+function pickIosIpaArtifact(artifacts: Artifact[]): Artifact | undefined {
+  const ipa_candidates = artifacts.filter(
+    (artifact) => artifact.platform === 'ios' && artifact.path.toLowerCase().endsWith('.ipa'),
+  );
+  if (ipa_candidates.length === 0) {
+    return undefined;
+  }
+  return ipa_candidates.find((artifact) => artifact.mode === 'release') ?? ipa_candidates[0];
 }
 
 function mapRelease(release: {
