@@ -1,0 +1,53 @@
+name: Release and Debug Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      release_name:
+        description: "Release name (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      release_body:
+        description: "Release body (optional)"
+        type: string
+        default: ""
+      args:
+        description: "Extra args passed to the action"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: Desktop
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libssl-dev pkg-config llvm clang libclang-dev binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev libwayland-dev libxkbcommon-dev
+
+      - name: Package (desktop)
+        uses: Project-Robius-China/makepad-packaging-action@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          include_release: true
+          include_debug: true
+          args: ${{ inputs.args }}
+          packager_formats: deb,appimage
+          tagName: ${{ inputs.release_tag }}
+          releaseName: ${{ inputs.release_name }}
+          releaseBody: ${{ inputs.release_body }}

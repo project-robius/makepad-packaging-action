@@ -1,0 +1,46 @@
+name: Custom Project Path
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      project_path:
+        description: "Path to Makepad project"
+        type: string
+        default: "examples/my-app"
+      args:
+        description: "Extra args passed to the action"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: Desktop
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libssl-dev pkg-config llvm clang libclang-dev binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev libwayland-dev libxkbcommon-dev
+
+      - name: Package (desktop)
+        uses: Project-Robius-China/makepad-packaging-action@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          project_path: ${{ inputs.project_path }}
+          packager_formats: deb,appimage
+          args: ${{ inputs.args }}
+          tagName: ${{ inputs.release_tag }}

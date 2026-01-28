@@ -1,20 +1,8 @@
-name: Build Makepad (All Platforms)
+name: Desktop Matrix Release (Release ID)
 
 on:
   workflow_dispatch:
     inputs:
-      build_desktop:
-        description: "Build desktop packages"
-        type: boolean
-        default: true
-      build_android:
-        description: "Build Android APK"
-        type: boolean
-        default: true
-      build_ios:
-        description: "Build iOS app"
-        type: boolean
-        default: true
       release_tag:
         description: "Release tag (optional, supports __VERSION__)"
         type: string
@@ -45,19 +33,21 @@ permissions:
 
 jobs:
   desktop:
-    name: Desktop
+    name: Desktop (${{ matrix.name }})
     needs: create-release
-    if: ${{ inputs.build_desktop }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
-            packager_formats: deb
+            packager_formats: deb,appimage
+            name: Linux
           - os: macos-14
             packager_formats: dmg
+            name: macOS
           - os: windows-2022
             packager_formats: nsis
+            name: Windows
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -82,55 +72,8 @@ jobs:
           args: ${{ inputs.args }}
           packager_formats: ${{ matrix.packager_formats }}
 
-  android:
-    name: Android
-    needs: create-release
-    if: ${{ inputs.build_android }}
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Package (android)
-        uses: Project-Robius-China/makepad-packaging-action@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: --target aarch64-linux-android ${{ inputs.args }}
-
-  ios:
-    name: iOS
-    needs: create-release
-    if: ${{ inputs.build_ios }}
-    runs-on: macos-14
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Package (iOS)
-        uses: Project-Robius-China/makepad-packaging-action@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAKEPAD_IOS_ORG: com.example
-          MAKEPAD_IOS_APP: ExampleApp
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }} # base64
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }} # base64
-          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }} # You can set any temporary password you like.
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: --target aarch64-apple-ios ${{ inputs.args }}
-
   create-release:
     name: Create Release
-    if: ${{ inputs.build_desktop || inputs.build_android || inputs.build_ios }}
     runs-on: ubuntu-22.04
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}

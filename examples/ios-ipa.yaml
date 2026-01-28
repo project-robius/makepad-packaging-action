@@ -1,0 +1,74 @@
+name: iOS Device Build (IPA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      release_name:
+        description: "Release name (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      release_body:
+        description: "Release body (optional)"
+        type: string
+        default: ""
+      release_draft:
+        description: "Create draft release"
+        type: boolean
+        default: false
+      prerelease:
+        description: "Mark as prerelease"
+        type: boolean
+        default: false
+      ios_org:
+        description: "iOS org (e.g. com.example)"
+        type: string
+        default: "com.example"
+      ios_app:
+        description: "iOS app name"
+        type: string
+        default: "ExampleApp"
+      create_ipa:
+        description: "Create IPA (true/false)"
+        type: boolean
+        default: true
+      args:
+        description: "Extra args passed to the action"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    name: iOS
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Package (iOS)
+        uses: Project-Robius-China/makepad-packaging-action@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAKEPAD_IOS_ORG: ${{ inputs.ios_org }}
+          MAKEPAD_IOS_APP: ${{ inputs.ios_app }}
+          MAKEPAD_IOS_CREATE_IPA: ${{ inputs.create_ipa }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        with:
+          args: --target aarch64-apple-ios ${{ inputs.args }}
+          tagName: ${{ inputs.release_tag }}
+          releaseName: ${{ inputs.release_name }}
+          releaseBody: ${{ inputs.release_body }}
+          releaseDraft: ${{ inputs.release_draft || false }}
+          prerelease: ${{ inputs.prerelease || false }}

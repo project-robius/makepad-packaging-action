@@ -1,11 +1,12 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import stringArgv from 'string-argv';
-import type { Artifact, BuildOptions, InitOptions, ManifestToml } from './types';
+import type { Artifact, BuildOptions, InitOptions, ManifestToml, TargetPlatform } from './types';
 import { buildProject } from './build';
-import { basename, resolve } from 'node:path';
-import { createReadStream, existsSync, statSync } from 'node:fs';
-import { parse_manifest_toml, retry } from './utils';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { createReadStream, existsSync, mkdtempSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { execCommand, parse_manifest_toml, retry } from './utils';
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 
@@ -79,9 +80,18 @@ async function run(): Promise<void> {
     const tag_name_input = normalizeInput(core.getInput('tagName'));
     const release_name_input = normalizeInput(core.getInput('releaseName'));
     const release_body_input = normalizeInput(core.getInput('releaseBody'));
+    const release_id_input = normalizeInput(core.getInput('releaseId'));
+    const asset_name_template = normalizeInput(core.getInput('asset_name_template'));
+    const asset_prefix = normalizeInput(core.getInput('asset_prefix'));
     const release_draft = core.getBooleanInput('releaseDraft');
     const prerelease = core.getBooleanInput('prerelease');
     const github_token = normalizeInput(core.getInput('github_token')) || process.env.GITHUB_TOKEN || '';
+
+    const has_release_id = Boolean(release_id_input);
+    const release_id = has_release_id ? Number(release_id_input) : undefined;
+    if (has_release_id && (!Number.isInteger(release_id) || (release_id as number) <= 0)) {
+      throw new Error('releaseId must be a positive integer.');
+    }
 
     const build_options: BuildOptions = {
       args,
@@ -157,11 +167,48 @@ async function run(): Promise<void> {
     }
     core.setOutput('artifacts', JSON.stringify(artifacts));
 
-    if (!tag_name_input && (release_name_input || release_body_input)) {
+    if (!tag_name_input && !has_release_id && (release_name_input || release_body_input)) {
       core.warning('Release inputs provided without tagName; release upload skipped.');
     }
 
-    if (tag_name_input) {
+    if (has_release_id) {
+      const releaseId = release_id as number;
+      if (!github_token) {
+        throw new Error('GITHUB_TOKEN (or github_token input) is required for release upload.');
+      }
+
+      if (tag_name_input || release_name_input || release_body_input) {
+        core.info(
+          'releaseId provided; tagName/releaseName/releaseBody inputs are ignored for release creation.',
+        );
+      }
+      if (release_draft || prerelease) {
+        core.info('releaseId provided; releaseDraft/prerelease inputs are ignored for release creation.');
+      }
+
+      const octokit = github.getOctokit(github_token);
+      const { owner, repo } = github.context.repo;
+      try {
+        const release = await getReleaseById(octokit, owner, repo, releaseId);
+        if (release) {
+          core.setOutput('release_url', release.html_url);
+        }
+      } catch (error) {
+        core.warning(`Failed to fetch release ${release_id_input}: ${(error as Error).message}`);
+      }
+
+      if (artifacts.length > 0) {
+        await uploadReleaseAssets({
+          token: github_token,
+          releaseId,
+          artifacts,
+          assetNameTemplate: asset_name_template,
+          assetPrefix: asset_prefix,
+          appName: resolved_app_name,
+          appVersion: resolved_app_version,
+        });
+      }
+    } else if (tag_name_input) {
       if (!github_token) {
         throw new Error('GITHUB_TOKEN (or github_token input) is required for release upload.');
       }
@@ -192,6 +239,10 @@ async function run(): Promise<void> {
           token: github_token,
           releaseId: release.id,
           artifacts,
+          assetNameTemplate: asset_name_template,
+          assetPrefix: asset_prefix,
+          appName: resolved_app_name,
+          appVersion: resolved_app_version,
         });
       }
 
@@ -286,6 +337,28 @@ async function getReleaseByTag(
       owner,
       repo,
       tag: tagName,
+    });
+    return mapRelease(existing.data);
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function getReleaseById(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  releaseId: number,
+): Promise<ReleaseSummary | null> {
+  try {
+    const existing = await octokit.rest.repos.getRelease({
+      owner,
+      repo,
+      release_id: releaseId,
     });
     return mapRelease(existing.data);
   } catch (error) {
@@ -620,14 +693,176 @@ async function cleanupDuplicateReleases(params: {
   }
 }
 
+const RECOMMENDED_EXTENSIONS: Record<TargetPlatform, string[]> = {
+  macos: ['dmg', 'pkg'],
+  windows: ['msi', 'exe'],
+  linux: ['deb', 'appimage', 'rpm'],
+  android: ['apk'],
+  ios: ['ipa'],
+  ohos: ['hap'],
+};
+
+function getExtensionInfo(filePath: string): { raw: string; lower: string } {
+  const ext = extname(filePath);
+  const raw = ext.startsWith('.') ? ext.slice(1) : ext;
+  return { raw, lower: raw.toLowerCase() };
+}
+
+function sanitizeAssetNamePart(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const sanitized = trimmed
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return sanitized || undefined;
+}
+
+function normalizeAssetName(name: string): string {
+  return name.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, '-');
+}
+
+function applyTemplate(template: string, values: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(values)) {
+    result = result.split(key).join(value);
+  }
+  return result;
+}
+
+function ensureUniqueAssetName(name: string, used: Set<string>): string {
+  if (!used.has(name)) {
+    used.add(name);
+    return name;
+  }
+
+  const ext = extname(name);
+  const base = ext ? name.slice(0, -ext.length) : name;
+  let index = 2;
+  let candidate = `${base}-${index}${ext}`;
+  while (used.has(candidate)) {
+    index += 1;
+    candidate = `${base}-${index}${ext}`;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function filterArtifactsForUpload(artifacts: Artifact[]): Artifact[] {
+  const groupInfo = new Map<string, { recommended: string[]; hasRecommended: boolean }>();
+
+  for (const artifact of artifacts) {
+    const key = `${artifact.platform}|${artifact.arch}|${artifact.mode}`;
+    let info = groupInfo.get(key);
+    if (!info) {
+      const recommended = RECOMMENDED_EXTENSIONS[artifact.platform] ?? [];
+      info = { recommended, hasRecommended: false };
+      groupInfo.set(key, info);
+    }
+    const ext = getExtensionInfo(artifact.path).lower;
+    if (info.recommended.length > 0 && info.recommended.includes(ext)) {
+      info.hasRecommended = true;
+    }
+  }
+
+  const filtered: Artifact[] = [];
+  for (const artifact of artifacts) {
+    const key = `${artifact.platform}|${artifact.arch}|${artifact.mode}`;
+    const info = groupInfo.get(key);
+    if (!info || info.recommended.length === 0 || !info.hasRecommended) {
+      filtered.push(artifact);
+      continue;
+    }
+    const ext = getExtensionInfo(artifact.path).lower;
+    if (info.recommended.includes(ext)) {
+      filtered.push(artifact);
+    }
+  }
+
+  return filtered;
+}
+
+async function zipDirectory(sourceDir: string, destZip: string): Promise<void> {
+  if (process.platform === 'win32') {
+    const escapedSource = sourceDir.replace(/'/g, "''");
+    const escapedDest = destZip.replace(/'/g, "''");
+    const command = `Compress-Archive -Path '${escapedSource}' -DestinationPath '${escapedDest}' -Force`;
+    await execCommand('powershell', ['-NoProfile', '-Command', command]);
+    return;
+  }
+
+  await execCommand('zip', ['-r', destZip, basename(sourceDir)], { cwd: dirname(sourceDir) });
+}
+
+function buildAssetName(params: {
+  artifact: Artifact;
+  uploadPath: string;
+  assetNameTemplate?: string;
+  assetPrefix?: string;
+  appName?: string;
+  appVersion?: string;
+}): string {
+  const { artifact, uploadPath, assetNameTemplate, assetPrefix, appName, appVersion } = params;
+  const extension = getExtensionInfo(uploadPath);
+  const uploadFilename = basename(uploadPath);
+  const uploadBasename = extension.raw
+    ? uploadFilename.slice(0, -(extension.raw.length + 1))
+    : uploadFilename;
+
+  const values: Record<string, string> = {
+    '__APP__': sanitizeAssetNamePart(appName) ?? '',
+    '__VERSION__': sanitizeAssetNamePart(appVersion) ?? '',
+    '__PLATFORM__': sanitizeAssetNamePart(artifact.platform) ?? '',
+    '__ARCH__': sanitizeAssetNamePart(artifact.arch) ?? '',
+    '__MODE__': sanitizeAssetNamePart(artifact.mode) ?? '',
+    '__EXT__': sanitizeAssetNamePart(extension.raw) ?? '',
+    '__FILENAME__': sanitizeAssetNamePart(uploadFilename) ?? '',
+    '__BASENAME__': sanitizeAssetNamePart(uploadBasename) ?? '',
+  };
+
+  let name: string;
+
+  if (assetNameTemplate) {
+    name = applyTemplate(assetNameTemplate, values);
+  } else {
+    const parts = [
+      values['__APP__'],
+      values['__VERSION__'],
+      values['__PLATFORM__'],
+      values['__ARCH__'],
+      values['__MODE__'],
+    ].filter(Boolean);
+    const base = parts.length > 0 ? parts.join('-') : values['__BASENAME__'] || uploadBasename;
+    name = extension.raw ? `${base}.${extension.raw}` : base;
+  }
+
+  const prefix = sanitizeAssetNamePart(assetPrefix);
+  if (prefix) {
+    name = `${prefix}-${name}`;
+  }
+
+  const normalized = normalizeAssetName(name);
+  return normalized || uploadFilename;
+}
+
 async function uploadReleaseAssets(params: {
   token: string;
   releaseId: number;
   artifacts: Artifact[];
+  assetNameTemplate?: string;
+  assetPrefix?: string;
+  appName?: string;
+  appVersion?: string;
 }): Promise<void> {
-  const { token, releaseId, artifacts } = params;
+  const { token, releaseId, artifacts, assetNameTemplate, assetPrefix, appName, appVersion } = params;
   const octokit = github.getOctokit(token);
   const { owner, repo } = github.context.repo;
+
+  const filteredArtifacts = filterArtifactsForUpload(artifacts);
+  if (filteredArtifacts.length !== artifacts.length) {
+    core.info(`Filtered artifacts for release upload: ${filteredArtifacts.length}/${artifacts.length} selected.`);
+  }
 
   const existingAssets = await octokit.rest.repos.listReleaseAssets({
     owner,
@@ -639,13 +874,34 @@ async function uploadReleaseAssets(params: {
     existingAssets.data.map((asset) => [asset.name, asset.id]),
   );
 
-  for (const artifact of artifacts) {
+  const usedNames = new Set<string>();
+
+  for (const artifact of filteredArtifacts) {
     if (!existsSync(artifact.path)) {
       core.warning(`Artifact not found on disk: ${artifact.path}`);
       continue;
     }
 
-    const assetName = basename(artifact.path);
+    let uploadPath = artifact.path;
+    const stat = statSync(uploadPath);
+    if (stat.isDirectory()) {
+      const tempRoot = mkdtempSync(join(tmpdir(), 'makepad-packaging-action-'));
+      const zipPath = join(tempRoot, `${basename(uploadPath)}.zip`);
+      core.info(`Zipping directory artifact: ${uploadPath} -> ${zipPath}`);
+      await zipDirectory(uploadPath, zipPath);
+      uploadPath = zipPath;
+    }
+
+    let assetName = buildAssetName({
+      artifact,
+      uploadPath,
+      assetNameTemplate,
+      assetPrefix,
+      appName,
+      appVersion,
+    });
+    assetName = ensureUniqueAssetName(assetName, usedNames);
+
     const existingId = existingByName.get(assetName);
     if (existingId) {
       await octokit.rest.repos.deleteReleaseAsset({
@@ -655,16 +911,16 @@ async function uploadReleaseAssets(params: {
       });
     }
 
-    const stat = statSync(artifact.path);
+    const uploadStat = statSync(uploadPath);
     await octokit.rest.repos.uploadReleaseAsset({
       owner,
       repo,
       release_id: releaseId,
       name: assetName,
-      data: createReadStream(artifact.path) as unknown as string,
+      data: createReadStream(uploadPath) as unknown as string,
       headers: {
         'content-type': 'application/octet-stream',
-        'content-length': stat.size,
+        'content-length': uploadStat.size,
       },
     });
   }

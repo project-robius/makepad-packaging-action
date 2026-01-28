@@ -41,6 +41,9 @@ These inputs are already defined in `action.yaml`:
 - `tagName`: GitHub Release tag, supports `__VERSION__` placeholder
 - `releaseName`: Release title, supports `__VERSION__` placeholder
 - `releaseBody`: Release body markdown
+- `releaseId`: existing GitHub Release ID (uploads assets to this release and skips release creation)
+- `asset_name_template`: template for asset names (`__APP__`, `__VERSION__`, `__PLATFORM__`, `__ARCH__`, `__MODE__`, `__EXT__`, `__FILENAME__`, `__BASENAME__`)
+- `asset_prefix`: optional prefix prepended to generated asset names
 - `releaseDraft`: create draft release (`true`/`false`)
 - `prerelease`: mark as prerelease (`true`/`false`)
 - `github_token`: token for release creation/upload (defaults to env `GITHUB_TOKEN`)
@@ -125,7 +128,11 @@ The action uses `--device=iPhone` for device builds.
 - Resolve app metadata from `Cargo.toml` unless overridden
 - Install packaging tools per target (`cargo-packager`, `cargo-makepad`)
 - Build artifacts and collect outputs into a normalized list
-- If `tagName` provided, create/update a GitHub Release and upload artifacts
+- If `releaseId` provided, upload artifacts to that release (no release creation)
+- If `tagName` provided (and `releaseId` not set), create/update a GitHub Release and upload artifacts
+- Release upload filters to recommended formats per platform when available (e.g. macOS `.dmg`, iOS `.ipa`)
+- If an artifact is a directory (like `.app`), it is zipped before upload
+- Asset names default to a unique `app-version-platform-arch-mode.ext` pattern unless overridden
 - Release upload requires a token with `contents: write` permission
 
 ### Placeholder replacement
@@ -161,6 +168,36 @@ When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will insta
     releaseDraft: true
     prerelease: false
     args: ${{ matrix.args }}
+
+### Example: upload to an existing release
+
+Create the release once, then pass its ID to every build job so assets land on the same page.
+
+```yaml
+jobs:
+  create-release:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+    steps:
+      - uses: softprops/action-gh-release@v2
+        id: create_release
+        with:
+          tag_name: v1.2.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  package:
+    needs: create-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: Project-Robius-China/makepad-packaging-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: --target aarch64-linux-android
+```
 ```
 
 ### Example: Android only

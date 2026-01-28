@@ -25,6 +25,15 @@ inputs:
   releaseBody:
     description: 'GitHub Release body markdown.'
 
+  releaseId:
+    description: 'Existing GitHub Release ID. When provided, assets are uploaded to this release and no new release is created.'
+
+  asset_name_template:
+    description: 'Template for release asset names. Supports __APP__, __VERSION__, __PLATFORM__, __ARCH__, __MODE__, __EXT__, __FILENAME__, __BASENAME__.'
+
+  asset_prefix:
+    description: 'Optional prefix prepended to generated asset names.'
+
   releaseDraft:
     description: 'Create the release as a draft.'
     default: 'false'

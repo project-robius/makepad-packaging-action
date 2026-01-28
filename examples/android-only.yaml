@@ -1,0 +1,74 @@
+name: Android APK (Single Job)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      release_name:
+        description: "Release name (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      release_body:
+        description: "Release body (optional)"
+        type: string
+        default: ""
+      release_draft:
+        description: "Create draft release"
+        type: boolean
+        default: false
+      prerelease:
+        description: "Mark as prerelease"
+        type: boolean
+        default: false
+      android_target:
+        description: "Android target triple"
+        type: string
+        default: "aarch64-linux-android"
+      android_abi:
+        description: "Android ABI (x86_64, aarch64, armv7, i686)"
+        type: string
+        default: "aarch64"
+      android_variant:
+        description: "Android variant (default, quest)"
+        type: string
+        default: "default"
+      android_full_ndk:
+        description: "Install full NDK (true/false)"
+        type: boolean
+        default: false
+      args:
+        description: "Extra args passed to the action"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Package (android)
+        uses: Project-Robius-China/makepad-packaging-action@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAKEPAD_ANDROID_ABI: ${{ inputs.android_abi }}
+          MAKEPAD_ANDROID_VARIANT: ${{ inputs.android_variant }}
+          MAKEPAD_ANDROID_FULL_NDK: ${{ inputs.android_full_ndk }}
+        with:
+          args: --target ${{ inputs.android_target }} ${{ inputs.args }}
+          tagName: ${{ inputs.release_tag }}
+          releaseName: ${{ inputs.release_name }}
+          releaseBody: ${{ inputs.release_body }}
+          releaseDraft: ${{ inputs.release_draft || false }}
+          prerelease: ${{ inputs.prerelease || false }}

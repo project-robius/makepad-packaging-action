@@ -1,0 +1,74 @@
+name: Asset Naming Template
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      asset_name_template:
+        description: "Template for asset names"
+        type: string
+        default: "__APP__-__VERSION__-__PLATFORM__-__ARCH__-__MODE__.__EXT__"
+      asset_prefix:
+        description: "Prefix for asset names"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: Desktop
+    needs: create-release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libssl-dev pkg-config llvm clang libclang-dev binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev libwayland-dev libxkbcommon-dev
+
+      - name: Package (desktop)
+        uses: Project-Robius-China/makepad-packaging-action@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          asset_name_template: ${{ inputs.asset_name_template }}
+          asset_prefix: ${{ inputs.asset_prefix }}
+          packager_formats: deb,appimage
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      release_tag: ${{ steps.get_tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get tag
+        id: get_tag
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=v$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
