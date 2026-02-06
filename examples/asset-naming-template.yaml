@@ -51,26 +51,18 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-22.04
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag != '' && inputs.release_tag || format('v{0}', github.run_id) }}
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
-      release_tag: ${{ steps.get_tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Get tag
-        id: get_tag
-        run: |
-          if [ -n "${{ inputs.release_tag }}" ]; then
-            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=v$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_tag.outputs.tag }}
+          tag_name: ${{ env.RELEASE_TAG }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

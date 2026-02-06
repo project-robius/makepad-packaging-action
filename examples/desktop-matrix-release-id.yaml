@@ -77,37 +77,20 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-22.04
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag != '' && inputs.release_tag || format('v{0}', github.run_id) }}
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
-      release_tag: ${{ steps.get_tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Get tag
-        id: get_tag
-        run: |
-          if [ -n "${{ inputs.release_tag }}" ]; then
-            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=v$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get release name
-        id: get_name
-        run: |
-          if [ -n "${{ inputs.release_name }}" ]; then
-            echo "name=${{ inputs.release_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "name=Makepad Release ${{ steps.get_tag.outputs.tag }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_tag.outputs.tag }}
-          name: ${{ steps.get_name.outputs.name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ inputs.release_name != '' && inputs.release_name || format('Makepad Release {0}', env.RELEASE_TAG) }}
           body: ${{ inputs.release_body }}
           draft: ${{ inputs.release_draft || false }}
           prerelease: ${{ inputs.prerelease || false }}
