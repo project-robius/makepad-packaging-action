@@ -137,6 +137,7 @@ To upload to TestFlight, set `MAKEPAD_IOS_UPLOAD_TESTFLIGHT=true` and provide:
 - Android package names are normalized to valid Java identifiers (e.g. `dora-studio` → `dora_studio`)
 - If `releaseId` provided, upload artifacts to that release (no release creation)
 - If `tagName` provided (and `releaseId` not set), create/update a GitHub Release and upload artifacts
+- Note: GitHub Release creation is not atomic. If multiple jobs call the action with the same `tagName`, they can race and create separate drafts; prefer a single create-release job and pass `releaseId` to each job to keep assets together.
 - Release upload filters to recommended formats per platform when available (e.g. macOS `.dmg`, iOS `.ipa`)
 - If an artifact is a directory (like `.app`), it is zipped before upload
 - Asset names default to a unique `app-version-platform-arch-mode.ext` pattern unless overridden
