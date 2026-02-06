@@ -43,6 +43,9 @@ on:
 permissions:
   contents: write
 
+# Single-job example: using tagName is fine here. For multi-job/matrix builds, create the release once
+# and pass releaseId to each job to keep assets together.
+
 jobs:
   ios:
     name: iOS
