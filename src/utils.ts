@@ -2,8 +2,8 @@ import os from "os";
 import { execSync, spawn } from "child_process";
 import type { DesktopBuildDependencies, MobileTarget, TargetArch, TargetInfo, TargetPlatform, TargetPlatformType } from "./types";
 import which from 'which';
-import { readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "fs";
+import { dirname, join, resolve } from "path";
 import { JsonMap, parse as parseToml } from '@iarna/toml';
 
 export function getTargetInfo(triple?: string): TargetInfo {
@@ -143,8 +143,8 @@ export async function retry<T>(
 }
 
 export function parse_manifest_toml(path: string): JsonMap | null {
-  const contents = readFileSync(join(path, 'Cargo.toml')).toString();
   try {
+    const contents = readFileSync(join(path, 'Cargo.toml')).toString();
     const config = parseToml(contents);
     return config;
   } catch (e) {
@@ -153,4 +153,62 @@ export function parse_manifest_toml(path: string): JsonMap | null {
     console.error('Error parsing Cargo.toml:', msg);
     return null;
   }
+}
+
+function toNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isWorkspaceFieldRef(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const obj = value as Record<string, unknown>;
+  return obj.workspace === true;
+}
+
+function resolveWorkspacePackageField(
+  startPath: string,
+  field: 'name' | 'version',
+): string | undefined {
+  let dir = resolve(startPath);
+
+  while (true) {
+    const manifestPath = join(dir, 'Cargo.toml');
+    if (existsSync(manifestPath)) {
+      const manifest = parse_manifest_toml(dir) as Record<string, unknown> | null;
+      const workspace = manifest?.workspace as Record<string, unknown> | undefined;
+      const workspacePackage = workspace?.package as Record<string, unknown> | undefined;
+      const resolvedField = toNonEmptyString(workspacePackage?.[field]);
+      if (resolvedField) {
+        return resolvedField;
+      }
+    }
+
+    const parent = dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+
+  return undefined;
+}
+
+export function resolveManifestPackageField(
+  path: string,
+  field: 'name' | 'version',
+): string | undefined {
+  const manifest = parse_manifest_toml(path) as Record<string, unknown> | null;
+  const packageTable = manifest?.package as Record<string, unknown> | undefined;
+  const directField = toNonEmptyString(packageTable?.[field]);
+  if (directField) {
+    return directField;
+  }
+
+  if (isWorkspaceFieldRef(packageTable?.[field])) {
+    return resolveWorkspacePackageField(path, field);
+  }
+
+  return undefined;
 }

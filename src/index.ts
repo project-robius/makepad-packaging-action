@@ -1,12 +1,12 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import stringArgv from 'string-argv';
-import type { Artifact, BuildOptions, InitOptions, ManifestToml, TargetPlatform } from './types';
+import type { Artifact, BuildOptions, InitOptions, TargetPlatform } from './types';
 import { buildProject } from './build';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { createReadStream, existsSync, mkdtempSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { execCommand, parse_manifest_toml, retry } from './utils';
+import { execCommand, resolveManifestPackageField, retry } from './utils';
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 
@@ -153,9 +153,8 @@ async function run(): Promise<void> {
       app_version,
     };
 
-    const manifest = parse_manifest_toml(projectPath) as ManifestToml | null;
-    const resolved_app_name = app_name || manifest?.package?.name;
-    const resolved_app_version = app_version || manifest?.package?.version;
+    const resolved_app_name = app_name || resolveManifestPackageField(projectPath, 'name');
+    const resolved_app_version = app_version || resolveManifestPackageField(projectPath, 'version');
 
 
     const release_artifacts: Artifact[] = [];

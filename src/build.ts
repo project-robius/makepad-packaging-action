@@ -5,7 +5,7 @@ import { buildOhosArtifacts, installOhosBuildDependencies } from "./builds/ohos"
 import { buildIosArtifacts, installIosBuildDependencies } from "./builds/ios";
 import { PackagingConfig } from "./config";
 import type { Artifact, BuildOptions, InitOptions, MobileTarget, TargetArch } from "./types";
-import { execCommand, getTargetInfo, isCommandAvailable, parse_manifest_toml, retry } from "./utils";
+import { execCommand, getTargetInfo, isCommandAvailable, parse_manifest_toml, resolveManifestPackageField, retry } from "./utils";
 
 export async function buildProject(
   root: string,
@@ -189,11 +189,11 @@ function resolveDesktopDefaults(
     throw new Error('Failed to read Cargo.toml package metadata.');
   }
 
-  const app_name = initOptions.app_name ?? manifest.package.name;
-  const app_version = initOptions.app_version ?? manifest.package.version;
+  const app_name = initOptions.app_name ?? resolveManifestPackageField(root, 'name');
+  const app_version = initOptions.app_version ?? resolveManifestPackageField(root, 'version');
 
   if (!app_name || !app_version) {
-    throw new Error('Missing app name or version from Cargo.toml.');
+    throw new Error('Missing app name or version from Cargo.toml (including workspace.package inheritance).');
   }
 
   const out_dir = resolvePackagerOutDir(root, manifest);

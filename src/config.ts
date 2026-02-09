@@ -1,8 +1,5 @@
-import { existsSync } from "fs";
-import { join } from "path";
 import { AndroidPackagingConfig } from "./builds/android";
-import { parse_manifest_toml } from "./utils";
-import { ManifestToml } from "./types";
+import { parse_manifest_toml, resolveManifestPackageField } from "./utils";
 
 export class PackagingConfig {
 
@@ -33,9 +30,13 @@ export class PackagingConfig {
   private get_default_packaging_config(project_path: string): {
     android_config: AndroidPackagingConfig;
   } {
-    const manifest = parse_manifest_toml(project_path) as ManifestToml | null;
+    const manifest = parse_manifest_toml(project_path) as Record<string, unknown> | null;
     if (manifest) {
-      const { name, version } = manifest.package;
+      const name = resolveManifestPackageField(project_path, 'name');
+      const version = resolveManifestPackageField(project_path, 'version');
+      if (!name || !version) {
+        throw new Error('Could not resolve package name/version from Cargo.toml (including workspace.package inheritance).');
+      }
       const identifier = `org.makepad.${name.toLowerCase()}`;
       const main_binary_name = name; // Default to package name, can be overridden by [[bin]] section if needed.
       return {
