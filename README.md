@@ -61,6 +61,8 @@ Mobile and signing configuration is provided via env vars only:
 - `MAKEPAD_ANDROID_ABI`: Android ABI override (`x86_64`, `aarch64`, `armv7`, `i686`), default `aarch64`
 - `MAKEPAD_ANDROID_FULL_NDK`: install full Android NDK (`true`/`false`), default `false`
 - `MAKEPAD_ANDROID_VARIANT`: Android build variant (`default`, `quest`), default `default`
+- `MAKEPAD_MOBILE_CARGO_EXTRA_ARGS`: extra args appended to both iOS and Android `cargo makepad` build commands
+- `MAKEPAD_ANDROID_CARGO_EXTRA_ARGS`: extra args appended only to Android `cargo makepad` build commands
 
 - `MAKEPAD_IOS_ORG`: iOS org identifier (e.g. `com.example`)
 - `MAKEPAD_IOS_APP`: iOS app name
@@ -69,11 +71,24 @@ Mobile and signing configuration is provided via env vars only:
 - `MAKEPAD_IOS_SIM`: build for iOS simulator (`true`/`false`), default `false`
 - `MAKEPAD_IOS_CREATE_IPA`: create IPA from .app bundle (`true`/`false`), default `false`
 - `MAKEPAD_IOS_UPLOAD_TESTFLIGHT`: upload IPA to TestFlight (`true`/`false`), default `false`
+- `MAKEPAD_IOS_CARGO_EXTRA_ARGS`: extra args appended only to iOS `cargo makepad` build commands
 - `APPLE_CERTIFICATE`: base64-encoded Apple signing certificate (.p12)
 - `APPLE_CERTIFICATE_PASSWORD`: password for the certificate
 - `APPLE_PROVISIONING_PROFILE`: base64-encoded provisioning profile (.mobileprovision)
 - `APPLE_KEYCHAIN_PASSWORD`: password for the temporary keychain
 - `APPLE_SIGNING_IDENTITY`: signing identity common name used to locate the certificate (default: `Apple Distribution`)
+
+For faster mobile CI builds (mirroring `robrix#729`), you can pass Cargo profile overrides:
+
+```yaml
+env:
+  MAKEPAD_MOBILE_CARGO_EXTRA_ARGS: >-
+    --config profile.dev.opt-level=0
+    --config profile.dev.debug=false
+    --config profile.dev.lto=off
+    --config profile.dev.strip=true
+    --config profile.dev.debug-assertions=false
+```
 
 ### iOS (cargo-makepad) reference
 

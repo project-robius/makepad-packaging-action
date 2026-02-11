@@ -55,6 +55,8 @@ async function run(): Promise<void> {
     const android_abi = getEnvValue('MAKEPAD_ANDROID_ABI') ?? 'aarch64';
     const android_full_ndk = parseEnvBool(getEnvValue('MAKEPAD_ANDROID_FULL_NDK'));
     const android_variant = getEnvValue('MAKEPAD_ANDROID_VARIANT') ?? 'default';
+    const mobile_cargo_extra_args = stringArgv(getEnvValue('MAKEPAD_MOBILE_CARGO_EXTRA_ARGS') ?? '');
+    const android_cargo_extra_args = stringArgv(getEnvValue('MAKEPAD_ANDROID_CARGO_EXTRA_ARGS') ?? '');
 
     const ios_org = getEnvValue('MAKEPAD_IOS_ORG');
     const ios_app = getEnvValue('MAKEPAD_IOS_APP');
@@ -63,6 +65,7 @@ async function run(): Promise<void> {
     const ios_sim = parseEnvBool(getEnvValue('MAKEPAD_IOS_SIM') ?? 'false');
     let ios_create_ipa = parseEnvBool(getEnvValue('MAKEPAD_IOS_CREATE_IPA') ?? 'false');
     const ios_upload_testflight = parseEnvBool(getEnvValue('MAKEPAD_IOS_UPLOAD_TESTFLIGHT') ?? 'false');
+    const ios_cargo_extra_args = stringArgv(getEnvValue('MAKEPAD_IOS_CARGO_EXTRA_ARGS') ?? '');
     const app_store_connect_api_key =
       getEnvValue('APP_STORE_CONNECT_API_KEY') ??
       getEnvValue('APP_STORE_CONNECT_API_KEY_CONTENT');
@@ -94,6 +97,15 @@ async function run(): Promise<void> {
     if (args.length > 0) {
       core.info(`Build args provided: ${args.length} token(s).`);
     }
+    if (mobile_cargo_extra_args.length > 0) {
+      core.info(`MAKEPAD_MOBILE_CARGO_EXTRA_ARGS enabled: ${mobile_cargo_extra_args.length} token(s).`);
+    }
+    if (android_cargo_extra_args.length > 0) {
+      core.info(`MAKEPAD_ANDROID_CARGO_EXTRA_ARGS enabled: ${android_cargo_extra_args.length} token(s).`);
+    }
+    if (ios_cargo_extra_args.length > 0) {
+      core.info(`MAKEPAD_IOS_CARGO_EXTRA_ARGS enabled: ${ios_cargo_extra_args.length} token(s).`);
+    }
 
     if (ios_upload_testflight) {
       if (ios_sim) {
@@ -120,6 +132,9 @@ async function run(): Promise<void> {
       args,
       packager_args: packager_args.length ? packager_args : undefined,
       packager_formats: packager_formats.length ? packager_formats : undefined,
+      mobile_cargo_extra_args: mobile_cargo_extra_args.length ? mobile_cargo_extra_args : undefined,
+      android_cargo_extra_args: android_cargo_extra_args.length ? android_cargo_extra_args : undefined,
+      ios_cargo_extra_args: ios_cargo_extra_args.length ? ios_cargo_extra_args : undefined,
       android_abi: android_abi as BuildOptions['android_abi'],
       android_full_ndk,
       android_variant: android_variant as BuildOptions['android_variant'],
