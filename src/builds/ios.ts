@@ -60,6 +60,9 @@ export async function buildIosArtifacts(
 
   let resolved_profile = ios_profile;
   let resolved_cert = ios_cert;
+  let signing_cleanup: (() => Promise<void>) | undefined;
+
+  try {
 
   if (!ios_sim && (!resolved_profile || !resolved_cert)) {
     const signing = await ensureIosSigning({
@@ -73,6 +76,7 @@ export async function buildIosArtifacts(
     });
     resolved_profile = signing.profile;
     resolved_cert = signing.cert;
+    signing_cleanup = signing.cleanup;
   }
 
   if (!ios_sim && (!resolved_profile || !resolved_cert)) {
@@ -143,6 +147,17 @@ export async function buildIosArtifacts(
   }
 
   return artifacts;
+  } finally {
+    if (signing_cleanup) {
+      try {
+        await signing_cleanup();
+      } catch (cleanupError) {
+        console.warn(
+          `Failed to clean up temporary iOS signing resources: ${(cleanupError as Error).message}`,
+        );
+      }
+    }
+  }
 }
 
 function resolveIosIdentifiers(params: {
@@ -197,7 +212,7 @@ async function ensureIosSigning(params: {
   apple_provisioning_profile?: string;
   apple_keychain_password?: string;
   apple_signing_identity?: string;
-}): Promise<{ profile?: string; cert?: string }> {
+}): Promise<{ profile?: string; cert?: string; cleanup?: () => Promise<void> }> {
   const {
     ios_profile,
     ios_cert,
@@ -223,52 +238,76 @@ async function ensureIosSigning(params: {
   const profile_plist_path = join(temp_root, `makepad_profile_${nonce}.plist`);
   const keychain_path = join(temp_root, `makepad_signing_${nonce}.keychain-db`);
   const keychain_password = apple_keychain_password ?? `makepad-${nonce}`;
+  let installed_profile_path: string | undefined;
+  let installed_profile_existed_before = false;
 
-  writeFileSync(cert_path, Buffer.from(apple_certificate, 'base64'));
-  writeFileSync(profile_path, Buffer.from(apple_provisioning_profile, 'base64'));
+  const cleanup = async (): Promise<void> => {
+    if (installed_profile_path && !installed_profile_existed_before) {
+      rmSync(installed_profile_path, { force: true });
+    }
+    rmSync(cert_path, { force: true });
+    rmSync(profile_path, { force: true });
+    rmSync(profile_plist_path, { force: true });
 
-  await execCommand('security', ['create-keychain', '-p', keychain_password, keychain_path]);
-  await execCommand('security', ['set-keychain-settings', '-lut', '21600', keychain_path]);
-  await execCommand('security', ['unlock-keychain', '-p', keychain_password, keychain_path]);
-  await execCommand('security', [
-    'import',
-    cert_path,
-    '-P',
-    apple_certificate_password,
-    '-A',
-    '-t',
-    'cert',
-    '-f',
-    'pkcs12',
-    '-k',
-    keychain_path,
-  ]);
-  await execCommand('security', [
-    'set-key-partition-list',
-    '-S',
-    'apple-tool:,apple:',
-    '-k',
-    keychain_password,
-    keychain_path,
-  ]);
-  await execCommand('security', ['list-keychain', '-d', 'user', '-s', keychain_path]);
+    try {
+      await execCommand('security', ['delete-keychain', keychain_path]);
+    } catch {
+      // Ignore cleanup failures; keychain may not exist yet or may already be removed.
+    }
+  };
 
-  const decoded_profile = await execCommand('security', ['cms', '-D', '-i', profile_path], { captureOutput: true });
-  writeFileSync(profile_plist_path, decoded_profile.output);
-  const uuid_output = await execCommand('/usr/libexec/PlistBuddy', ['-c', 'Print UUID', profile_plist_path], { captureOutput: true });
-  const profile_uuid = String(uuid_output.output ?? '').trim().split('\n').pop()?.trim();
+  try {
+    writeFileSync(cert_path, Buffer.from(apple_certificate, 'base64'));
+    writeFileSync(profile_path, Buffer.from(apple_provisioning_profile, 'base64'));
 
-  if (!profile_uuid) {
-    throw new Error('Failed to read UUID from provisioning profile.');
+    await execCommand('security', ['create-keychain', '-p', keychain_password, keychain_path]);
+    await execCommand('security', ['set-keychain-settings', '-lut', '21600', keychain_path]);
+    await execCommand('security', ['unlock-keychain', '-p', keychain_password, keychain_path]);
+    await execCommand('security', [
+      'import',
+      cert_path,
+      '-P',
+      apple_certificate_password,
+      '-A',
+      '-t',
+      'cert',
+      '-f',
+      'pkcs12',
+      '-k',
+      keychain_path,
+    ]);
+    await execCommand('security', [
+      'set-key-partition-list',
+      '-S',
+      'apple-tool:,apple:',
+      '-k',
+      keychain_password,
+      keychain_path,
+    ]);
+    await execCommand('security', ['list-keychain', '-d', 'user', '-s', keychain_path]);
+
+    const decoded_profile = await execCommand('security', ['cms', '-D', '-i', profile_path], { captureOutput: true });
+    writeFileSync(profile_plist_path, decoded_profile.output);
+    const uuid_output = await execCommand('/usr/libexec/PlistBuddy', ['-c', 'Print UUID', profile_plist_path], { captureOutput: true });
+    const profile_uuid = String(uuid_output.output ?? '').trim().split('\n').pop()?.trim();
+
+    if (!profile_uuid) {
+      throw new Error('Failed to read UUID from provisioning profile.');
+    }
+
+    const profiles_dir = join(homedir(), 'Library', 'MobileDevice', 'Provisioning Profiles');
+    mkdirSync(profiles_dir, { recursive: true });
+    installed_profile_path = join(profiles_dir, `${profile_uuid}.mobileprovision`);
+    installed_profile_existed_before = existsSync(installed_profile_path);
+    copyFileSync(profile_path, installed_profile_path);
+
+    const cert = await resolveSigningFingerprint(keychain_path, apple_signing_identity);
+
+    return { profile: ios_profile ?? profile_uuid, cert: ios_cert ?? cert, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw error;
   }
-
-  const profiles_dir = join(homedir(), 'Library', 'MobileDevice', 'Provisioning Profiles');
-  mkdirSync(profiles_dir, { recursive: true });
-  copyFileSync(profile_path, join(profiles_dir, `${profile_uuid}.mobileprovision`));
-
-  const cert = await resolveSigningFingerprint(keychain_path, apple_signing_identity);
-
-  return { profile: ios_profile ?? profile_uuid, cert: ios_cert ?? cert };
 }
 
 async function resolveSigningFingerprint(keychainPath: string, signingIdentity?: string): Promise<string> {
