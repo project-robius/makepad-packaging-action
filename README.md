@@ -138,6 +138,14 @@ and automatically forces `MAKEPAD_IOS_CREATE_IPA=true`.
 
 When `tagName` or `releaseName` contains `__VERSION__`, it is replaced with the resolved app version.
 
+### Release Modes
+
+Use one of these patterns depending on workflow size:
+
+- `Simple mode` (single job / quick setup): call this action once with `tagName` (or `releaseId`) and let it build + upload in one step. This is useful when you want minimal YAML and fast setup.
+- `Robust matrix mode` (recommended for many parallel jobs): create the GitHub Release once, pass its `releaseId` into each build job, and let each job upload only to that existing release. This avoids release-creation races and keeps multi-platform uploads consistent.
+- `Build-only mode`: omit both `tagName` and `releaseId` if you only want artifacts from the build step and will handle release publishing elsewhere.
+
 ### iOS signing convenience
 
 For iOS device builds, supply certificate and provisioning profile via env vars.
