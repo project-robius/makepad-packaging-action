@@ -17,19 +17,7 @@ export async function buildProject(
     ? (buildOptions.args ?? [])
     : (buildOptions.args ?? []).concat(['--release']);
 
-  const target_arg_index = args.findIndex(
-    (arg) => arg === '--target' || arg === '-t'
-  )
-
-  let target_triple: string | undefined;
-
-  if (target_arg_index >= 0) {
-    // Ensure that there is a value after the --target or -t argument
-    const next = args[target_arg_index + 1];
-    if (next && !next.startsWith('-')) {
-      target_triple = next;
-    }
-  }
+  const target_triple = parseTargetTripleFromArgs(args);
 
   const target_info = target_triple
     ? getTargetInfo(target_triple)
