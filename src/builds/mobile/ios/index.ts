@@ -35,6 +35,8 @@ export async function buildIosArtifacts(
     ios_cert,
     ios_sim,
     ios_create_ipa,
+    mobile_cargo_extra_args,
+    ios_cargo_extra_args,
     apple_certificate,
     apple_certificate_password,
     apple_provisioning_profile,
@@ -98,6 +100,14 @@ export async function buildIosArtifacts(
   }
   cargo_args.push(ios_sim ? 'run-sim' : 'run-device');
   cargo_args.push('-p', main_binary_name);
+  const platform_cargo_extra_args = [
+    ...(mobile_cargo_extra_args ?? []),
+    ...(ios_cargo_extra_args ?? []),
+  ];
+  if (platform_cargo_extra_args.length > 0) {
+    console.log(`Using ${platform_cargo_extra_args.length} extra iOS cargo arg(s).`);
+    cargo_args.push(...platform_cargo_extra_args);
+  }
   if (mode === 'release') cargo_args.push('--release');
 
   await execCommand('cargo', cargo_args, { cwd: root });

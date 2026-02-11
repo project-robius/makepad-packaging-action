@@ -15,6 +15,9 @@ export interface BuildOptions {
   main_binary_name?: string;
   packager_args?: string[];
   packager_formats?: string[];
+  mobile_cargo_extra_args?: string[];
+  android_cargo_extra_args?: string[];
+  ios_cargo_extra_args?: string[];
   android_abi?: AndroidABI;
   android_full_ndk?: boolean;
   android_variant?: AndroidVariant;

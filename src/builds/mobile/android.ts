@@ -80,6 +80,8 @@ export async function buildAndroidArtifacts(
     identifier: string;
     main_binary_name: string;
     mode: 'debug' | 'release';
+    mobile_cargo_extra_args?: string[];
+    android_cargo_extra_args?: string[];
     android_abi?: AndroidABI;
     android_variant?: AndroidVariant;
   };
@@ -93,6 +95,13 @@ export async function buildAndroidArtifacts(
   const variant_arg = android_variant && android_variant !== 'default'
     ? [`--variant=${android_variant}`]
     : [];
+  const cargo_extra_args = [
+    ...(buildOptions.mobile_cargo_extra_args ?? []),
+    ...(buildOptions.android_cargo_extra_args ?? []),
+  ];
+  if (cargo_extra_args.length > 0) {
+    console.log(`Using ${cargo_extra_args.length} extra Android cargo arg(s).`);
+  }
 
   // root/target/makepad-android-apk/<main_binary_name>/apk/
   const apk_prefix = `${app_name}_v${app_version}_${resolved_abi}`;
@@ -112,6 +121,7 @@ export async function buildAndroidArtifacts(
       'build',
       '-p',
       main_binary_name,
+      ...cargo_extra_args,
     ], { cwd: root });
 
     return [{
@@ -134,6 +144,7 @@ export async function buildAndroidArtifacts(
       'build',
       '-p',
       main_binary_name,
+      ...cargo_extra_args,
       '--release',
     ], { cwd: root });
 
