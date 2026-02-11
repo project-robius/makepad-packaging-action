@@ -6,6 +6,9 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { JsonMap, parse as parseToml } from '@iarna/toml';
 
+/**
+ * Resolve target platform/architecture from a Rust target triple or host defaults.
+ */
 export function getTargetInfo(triple?: string): TargetInfo {
   let target_platform: TargetPlatform = 
     process.platform === 'win32' ? 'windows'
@@ -80,6 +83,9 @@ export function isCommandAvailable(command: string): { installed: boolean; path?
   }
 }
 
+/**
+ * Spawn a command and optionally capture output for downstream parsing.
+ */
 export function execCommand(
   cmd: string,
   args: string[] = [],
@@ -120,6 +126,9 @@ export function execCommand(
   });
 }
 
+/**
+ * Retry a function with fixed delay.
+ */
 export async function retry<T>(
   fn: () => Promise<T> | T,
   retries: number = 3,
@@ -142,6 +151,9 @@ export async function retry<T>(
   throw lastError;
 }
 
+/**
+ * Parse Cargo.toml under the given project path.
+ */
 export function parse_manifest_toml(path: string): JsonMap | null {
   try {
     const contents = readFileSync(join(path, 'Cargo.toml')).toString();
@@ -211,4 +223,68 @@ export function resolveManifestPackageField(
   }
 
   return undefined;
+}
+
+/**
+ * Convert arbitrary input to a trimmed string.
+ */
+export function trimToString(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value.trim();
+  return String(value).trim();
+}
+
+/**
+ * Normalize string-like inputs and collapse empty values to undefined.
+ */
+export function normalizeInput(value?: string): string | undefined {
+  const trimmed = trimToString(value);
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Read and normalize an environment variable.
+ */
+export function getEnvValue(name: string): string | undefined {
+  return normalizeInput(process.env[name]);
+}
+
+/**
+ * Parse common truthy environment values.
+ */
+export function parseEnvBool(value?: string): boolean {
+  const normalized = trimToString(value).toLowerCase();
+  if (!normalized) return false;
+  return normalized === 'true' || normalized === '1' || normalized === 'yes';
+}
+
+export function replaceVersion(input: string, version?: string): string {
+  if (!version) return input;
+  return input.replace(/__VERSION__/g, version);
+}
+
+export function normalizeTagName(tagName: string): string {
+  const trimmed = trimToString(tagName);
+  if (trimmed.startsWith('refs/tags/')) {
+    return trimmed.slice('refs/tags/'.length);
+  }
+  if (trimmed.startsWith('tags/')) {
+    return trimmed.slice('tags/'.length);
+  }
+  return trimmed;
+}
+
+export function deriveTagNameFromRef(ref?: string | null): string | undefined {
+  if (!ref) return undefined;
+  if (ref.startsWith('refs/tags/')) {
+    return ref.slice('refs/tags/'.length);
+  }
+  if (ref.startsWith('tags/')) {
+    return ref.slice('tags/'.length);
+  }
+  return undefined;
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

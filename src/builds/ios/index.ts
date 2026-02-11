@@ -2,8 +2,8 @@ import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir, tmpdir } from "os";
 import { randomBytes } from "crypto";
-import type { Artifact, BuildOptions, TargetArch } from "../types";
-import { execCommand, retry } from "../utils";
+import type { Artifact, BuildOptions, TargetArch } from "../../types";
+import { execCommand, retry } from "../../utils";
 
 export async function installIosBuildDependencies(): Promise<void> {
   console.log('🔧 Installing iOS build dependencies...');
