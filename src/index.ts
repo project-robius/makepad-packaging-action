@@ -13,7 +13,7 @@ import {
   replaceVersion,
   resolveManifestPackageField,
 } from './utils';
-import { uploadToTestFlight } from './builds/ios/testflight';
+import { uploadToTestFlight } from './builds/mobile/ios/testflight';
 import {
   cleanupDuplicateReleases,
   ensureRelease,

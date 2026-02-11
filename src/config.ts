@@ -1,4 +1,4 @@
-import { AndroidPackagingConfig } from "./builds/android";
+import { AndroidPackagingConfig } from "./builds/mobile/android";
 import { parse_manifest_toml, resolveManifestPackageField } from "./utils";
 
 export class PackagingConfig {

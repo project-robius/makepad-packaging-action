@@ -1,6 +1,6 @@
 import { join } from "path";
-import type { AndroidABI, AndroidVariant, Artifact, BuildOptions, TargetArch } from "../types";
-import { execCommand, retry } from "../utils";
+import type { AndroidABI, AndroidVariant, Artifact, BuildOptions, TargetArch } from "../../types";
+import { execCommand, retry } from "../../utils";
 
 export type AndroidHostOs = 'windows_x64' | 'macos_x64' | 'macos_aarch64' | 'linux_x64';
 

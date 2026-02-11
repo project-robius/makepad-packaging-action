@@ -2,8 +2,8 @@ import * as core from '@actions/core';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import type { Artifact } from '../../types';
-import { execCommand } from '../../utils';
+import type { Artifact } from '../../../types';
+import { execCommand } from '../../../utils';
 
 /**
  * Upload the release IPA artifact to TestFlight via xcrun altool.
