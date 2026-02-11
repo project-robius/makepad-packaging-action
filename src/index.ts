@@ -4,7 +4,16 @@ import stringArgv from 'string-argv';
 import type { Artifact, BuildOptions, InitOptions, TargetPlatform } from './types';
 import { buildProject } from './build';
 import { basename, dirname, extname, join, resolve } from 'node:path';
-import { createReadStream, existsSync, mkdtempSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  createReadStream,
+  existsSync,
+  mkdtempSync,
+  statSync,
+  writeFileSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { execCommand, resolveManifestPackageField, retry } from './utils';
 
@@ -381,23 +390,39 @@ async function uploadToTestFlight(params: {
   const key_dir = join(homedir(), 'private_keys');
   mkdirSync(key_dir, { recursive: true });
   const key_path = join(key_dir, `AuthKey_${keyId}.p8`);
+  const key_existed_before = existsSync(key_path);
+  const previous_key_contents = key_existed_before ? readFileSync(key_path) : undefined;
   writeFileSync(key_path, apiKey);
 
-  core.info(`Uploading ${basename(ipa.path)} to TestFlight...`);
-  await execCommand('xcrun', [
-    'altool',
-    '--upload-app',
-    '--type',
-    'ios',
-    '--file',
-    ipa.path,
-    '--apiKey',
-    keyId,
-    '--apiIssuer',
-    issuerId,
-    '--verbose',
-  ]);
-  core.info('✅ Successfully uploaded to TestFlight!');
+  try {
+    core.info(`Uploading ${basename(ipa.path)} to TestFlight...`);
+    await execCommand('xcrun', [
+      'altool',
+      '--upload-app',
+      '--type',
+      'ios',
+      '--file',
+      ipa.path,
+      '--apiKey',
+      keyId,
+      '--apiIssuer',
+      issuerId,
+      '--verbose',
+    ]);
+    core.info('Successfully uploaded to TestFlight.');
+  } finally {
+    try {
+      if (key_existed_before && previous_key_contents !== undefined) {
+        writeFileSync(key_path, previous_key_contents);
+      } else {
+        rmSync(key_path, { force: true });
+      }
+    } catch (cleanupError) {
+      core.warning(
+        `Failed to clean up App Store Connect API key file: ${(cleanupError as Error).message}`,
+      );
+    }
+  }
 }
 
 function pickIosIpaArtifact(artifacts: Artifact[]): Artifact | undefined {
