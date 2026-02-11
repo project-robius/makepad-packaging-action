@@ -429,7 +429,6 @@ const RECOMMENDED_EXTENSIONS: Record<TargetPlatform, string[]> = {
   linux: ['deb', 'appimage', 'rpm'],
   android: ['apk'],
   ios: ['ipa'],
-  ohos: ['hap'],
 };
 
 function getExtensionInfo(filePath: string): { raw: string; lower: string } {

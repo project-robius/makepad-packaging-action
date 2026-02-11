@@ -75,19 +75,6 @@ Mobile and signing configuration is provided via env vars only:
 - `APPLE_KEYCHAIN_PASSWORD`: password for the temporary keychain
 - `APPLE_SIGNING_IDENTITY`: signing identity common name used to locate the certificate (default: `Apple Distribution`)
 
-OpenHarmony (HAP) signing configuration (CI-friendly):
-
-- `DEVECO_HOME`: path to DevEco Command Line Tools or DevEco Studio install (optional; the action auto-detects common install paths)
-- `OHOS_P12_BASE64`: base64-encoded `.p12` signing certificate
-- `OHOS_PROFILE_BASE64`: base64-encoded `.p7b` profile
-- `OHOS_P12_PASSWORD`: password for the `.p12` store
-- `OHOS_KEY_ALIAS`: key alias (default: `debugKey`)
-- `OHOS_KEY_PASSWORD`: key password (defaults to `OHOS_P12_PASSWORD`)
-- `OHOS_CERT_BASE64`: base64-encoded `.cer` (optional; will be extracted from `.p12` if missing)
-- `OHOS_SIGN_ALG`: signing algorithm (default: `SHA256withECDSA`)
-
-If `DEVECO_HOME` is not set, the action tries common install paths like `~/command-line-tools`, `/opt/command-line-tools`, or `/Applications/DevEco Studio.app/Contents`.
-
 ### iOS (cargo-makepad) reference
 
 Common commands used by the action:
@@ -130,7 +117,8 @@ To upload to TestFlight, set `MAKEPAD_IOS_UPLOAD_TESTFLIGHT=true` and provide:
 ### Behavior
 
 - Determine target from `args` (`--target`), else default to host platform
-- Mobile builds require a target triple (e.g. `aarch64-linux-android`, `aarch64-apple-ios`, `aarch64-unknown-linux-ohos`)
+- Mobile builds require a target triple (e.g. `aarch64-linux-android`, `aarch64-apple-ios`)
+- OpenHarmony targets are currently unsupported and will fail fast
 - Resolve app metadata from `Cargo.toml` unless overridden
 - Install packaging tools per target (`cargo-packager`, `cargo-makepad`)
 - Build artifacts and collect outputs into a normalized list
@@ -221,7 +209,7 @@ jobs:
 - Desktop packaging: implemented (cargo-packager)
 - Android packaging: implemented (APK build)
 - iOS packaging: implemented (app bundle, optional IPA)
-- OpenHarmony packaging: implemented (signed HAP build)
+- OpenHarmony packaging: not implemented
 - Web packaging: not implemented yet
 - Release upload: implemented
 

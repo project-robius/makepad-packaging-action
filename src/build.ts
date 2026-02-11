@@ -1,7 +1,6 @@
 import { existsSync, readdirSync } from "fs";
 import { isAbsolute, join } from "path";
 import { buildAndroidArtifacts, installAndroidBuildDependencies } from "./builds/android";
-import { buildOhosArtifacts, installOhosBuildDependencies } from "./builds/ohos";
 import { buildIosArtifacts, installIosBuildDependencies } from "./builds/ios";
 import { PackagingConfig } from "./config";
 import type { Artifact, BuildOptions, InitOptions, MobileTarget, TargetArch } from "./types";
@@ -412,11 +411,6 @@ async function buildMobileArtifacts(root: string, initOptions: InitOptions, buil
   if (target_platform === 'ios') {
     await installIosBuildDependencies();
     return await buildIosArtifacts(root, buildOptions);
-  }
-
-  if (target_platform === 'ohos') {
-    await installOhosBuildDependencies();
-    return await buildOhosArtifacts(root, buildOptions);
   }
 
   return [];

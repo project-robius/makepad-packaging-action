@@ -29,14 +29,6 @@ export interface BuildOptions {
   apple_provisioning_profile?: string;
   apple_keychain_password?: string;
   apple_signing_identity?: string;
-  ohos_deveco_home?: string;
-  ohos_signing_p12_base64?: string;
-  ohos_signing_profile_base64?: string;
-  ohos_signing_cert_base64?: string;
-  ohos_signing_store_password?: string;
-  ohos_signing_key_alias?: string;
-  ohos_signing_key_password?: string;
-  ohos_signing_sign_alg?: string;
 }
 
 export interface InitOptions {
@@ -54,7 +46,7 @@ export interface Artifact {
   arch: TargetArch;
 }
 
-export type MobileTarget = 'ios' | 'android' | 'ohos';
+export type MobileTarget = 'ios' | 'android';
 export type DesktopTarget = 'windows' | 'linux' | 'macos';
 export type TargetPlatform =  MobileTarget | DesktopTarget; // TODO: add 'wasm'
 export type TargetPlatformType = 'desktop' | 'mobile'; // TODO: add 'web'

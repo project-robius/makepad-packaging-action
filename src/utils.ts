@@ -24,9 +24,6 @@ export function getTargetInfo(triple?: string): TargetInfo {
     if (triple.includes('android')) {
       target_platform = 'android';
       type = 'mobile';
-    } else if (triple.includes('ohos') || triple.includes('openharmony')) {
-      target_platform = 'ohos';
-      type = 'mobile';
     } else if (triple.includes('ios')) {
       target_platform = 'ios';
       type = 'mobile';
@@ -36,6 +33,12 @@ export function getTargetInfo(triple?: string): TargetInfo {
       target_platform = 'macos';
     } else if (triple.includes('linux')) {
       target_platform = 'linux';
+    }
+
+    if (triple.includes('ohos') || triple.includes('openharmony')) {
+      throw new Error(
+        'OpenHarmony packaging is currently not supported by this action.',
+      );
     }
 
     if (triple.includes('-')) {

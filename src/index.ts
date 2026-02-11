@@ -74,18 +74,6 @@ async function run(): Promise<void> {
     const apple_provisioning_profile = getEnvValue('APPLE_PROVISIONING_PROFILE');
     const apple_keychain_password = getEnvValue('APPLE_KEYCHAIN_PASSWORD');
     const apple_signing_identity = getEnvValue('APPLE_SIGNING_IDENTITY');
-    const ohos_deveco_home = getEnvValue('DEVECO_HOME') ?? getEnvValue('OHOS_DEVECO_HOME');
-    const ohos_signing_p12_base64 =
-      getEnvValue('OHOS_P12_BASE64') ?? getEnvValue('OHOS_P12_B64');
-    const ohos_signing_profile_base64 =
-      getEnvValue('OHOS_PROFILE_BASE64') ?? getEnvValue('OHOS_PROFILE_B64');
-    const ohos_signing_cert_base64 =
-      getEnvValue('OHOS_CERT_BASE64') ?? getEnvValue('OHOS_CERT_B64');
-    const ohos_signing_store_password =
-      getEnvValue('OHOS_P12_PASSWORD') ?? getEnvValue('OHOS_STORE_PASSWORD');
-    const ohos_signing_key_alias = getEnvValue('OHOS_KEY_ALIAS');
-    const ohos_signing_key_password = getEnvValue('OHOS_KEY_PASSWORD');
-    const ohos_signing_sign_alg = getEnvValue('OHOS_SIGN_ALG');
 
     const tag_name_input_raw = normalizeInput(core.getInput('tagName'));
     const tag_name_from_ref = deriveTagNameFromRef(github.context.ref);
@@ -146,14 +134,6 @@ async function run(): Promise<void> {
       apple_provisioning_profile,
       apple_keychain_password,
       apple_signing_identity,
-      ohos_deveco_home,
-      ohos_signing_p12_base64,
-      ohos_signing_profile_base64,
-      ohos_signing_cert_base64,
-      ohos_signing_store_password,
-      ohos_signing_key_alias,
-      ohos_signing_key_password,
-      ohos_signing_sign_alg,
     };
 
     const init_options: InitOptions = {
