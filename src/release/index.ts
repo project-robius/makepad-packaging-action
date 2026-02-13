@@ -25,6 +25,7 @@ export type ReleaseSummary = {
 type ReleaseAssetSummary = {
   id: number;
   name: string;
+  api_url: string;
   browser_download_url: string;
 };
 
@@ -161,6 +162,7 @@ async function listReleaseAssets(
   return assets.map((asset) => ({
     id: asset.id,
     name: asset.name,
+    api_url: asset.url,
     browser_download_url: asset.browser_download_url,
   }));
 }
@@ -1137,25 +1139,53 @@ function buildUpdaterCandidateFromReleaseAsset(
   };
 }
 
-async function downloadReleaseAssetText(url: string, token: string): Promise<string> {
+function resolveGithubApiBaseUrl(githubBaseUrl?: string): string {
+  const configured = trimToString(githubBaseUrl) || trimToString(process.env.GITHUB_API_URL);
+  const base = configured || 'https://api.github.com';
+  return base.replace(/\/+$/, '');
+}
+
+async function downloadReleaseAssetText(params: {
+  asset: ReleaseAssetSummary;
+  token: string;
+  owner: string;
+  repo: string;
+  githubBaseUrl?: string;
+}): Promise<string> {
+  const { asset, token, owner, repo, githubBaseUrl } = params;
   const headers: Record<string, string> = {
     Accept: 'application/octet-stream',
+    'User-Agent': 'makepad-packaging-action',
   };
   if (trimToString(token)) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  const apiBase = resolveGithubApiBaseUrl(githubBaseUrl);
+  const encodedOwner = encodeURIComponent(owner);
+  const encodedRepo = encodeURIComponent(repo);
+  const apiUrl = `${apiBase}/repos/${encodedOwner}/${encodedRepo}/releases/assets/${asset.id}`;
+  const apiResponse = await fetch(apiUrl, {
     method: 'GET',
     headers,
     redirect: 'follow',
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to download release asset (${response.status} ${response.statusText}).`);
+  if (apiResponse.ok) {
+    return apiResponse.text();
   }
 
-  return response.text();
+  const fallbackResponse = await fetch(asset.browser_download_url, {
+    method: 'GET',
+    headers,
+    redirect: 'follow',
+  });
+  if (!fallbackResponse.ok) {
+    throw new Error(
+      `Failed to download release asset via API (${apiResponse.status} ${apiResponse.statusText}) and browser URL (${fallbackResponse.status} ${fallbackResponse.statusText}).`,
+    );
+  }
+  return fallbackResponse.text();
 }
 
 export async function uploadUpdaterJson(params: {
@@ -1215,7 +1245,13 @@ export async function uploadUpdaterJson(params: {
   const existingUpdaterAsset = releaseAssetByName.get(UPDATER_JSON_ASSET_NAME);
   if (existingUpdaterAsset) {
     try {
-      const existingText = await downloadReleaseAssetText(existingUpdaterAsset.browser_download_url, token);
+      const existingText = await downloadReleaseAssetText({
+        asset: existingUpdaterAsset,
+        token,
+        owner,
+        repo,
+        githubBaseUrl: params.githubBaseUrl,
+      });
       const parsed = JSON.parse(existingText) as Record<string, unknown>;
       existingVersion = trimToString(parsed.version);
       existingNotes = trimToString(parsed.notes);
@@ -1257,7 +1293,13 @@ export async function uploadUpdaterJson(params: {
 
     try {
       const signatureText = trimToString(
-        await downloadReleaseAssetText(signatureAsset.browser_download_url, token),
+        await downloadReleaseAssetText({
+          asset: signatureAsset,
+          token,
+          owner,
+          repo,
+          githubBaseUrl: params.githubBaseUrl,
+        }),
       );
       const value = signatureText || undefined;
       signatureCache.set(assetName, value);
