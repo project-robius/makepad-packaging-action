@@ -37,11 +37,11 @@ export type UploadedReleaseAsset = {
   uploadPath: string;
 };
 
-type UpdaterFormat = 'nsis' | 'wix' | 'appimage' | 'app';
+type UpdaterFormat = 'nsis' | 'wix' | 'appimage' | 'app' | 'apk' | 'ipa';
 
 type UpdaterPlatformEntry = {
   url: string;
-  signature: string;
+  signature?: string;
   format: UpdaterFormat;
 };
 
@@ -905,11 +905,11 @@ type UpdaterJsonDocument = {
 const UPDATER_JSON_ASSET_NAME = 'latest.json';
 
 const UPDATER_FORMAT_PRIORITY: Record<UpdaterPlatformName, UpdaterFormat[]> = {
-  windows: ['wix', 'nsis'],
+  windows: ['nsis', 'wix'],
   linux: ['appimage'],
   darwin: ['app'],
-  android: [],
-  ios: [],
+  android: ['apk'],
+  ios: ['ipa'],
 };
 
 const SUPPORTED_UPDATER_FORMATS = new Set([
@@ -917,6 +917,8 @@ const SUPPORTED_UPDATER_FORMATS = new Set([
   'wix',
   'appimage',
   'app',
+  'apk',
+  'ipa',
 ]);
 
 const UPDATER_BASE_KEY_PATTERN = /^(windows|linux|darwin|android|ios)-(x86_64|aarch64|armv7|i686)$/;
@@ -970,6 +972,14 @@ function inferUpdaterFormat(fileName: string, platform?: TargetPlatform): Update
 
   if (suffix === 'app') {
     return 'app';
+  }
+
+  if (suffix === 'apk') {
+    return 'apk';
+  }
+
+  if (suffix === 'ipa') {
+    return 'ipa';
   }
 
   if (suffix === 'tar.gz') {
@@ -1041,15 +1051,15 @@ function inferArchFromAssetName(fileName: string): TargetArch | undefined {
 function getUpdaterFormatPriority(
   platform: UpdaterPlatformName,
   format: UpdaterFormat | undefined,
-  preferNsis: boolean,
 ): number {
   if (!format) return Number.MAX_SAFE_INTEGER;
-  const list =
-    platform === 'windows'
-      ? (preferNsis ? ['nsis', 'wix'] : ['wix', 'nsis'])
-      : (UPDATER_FORMAT_PRIORITY[platform] ?? []);
+  const list = UPDATER_FORMAT_PRIORITY[platform] ?? [];
   const index = list.indexOf(format);
   return index >= 0 ? index : Number.MAX_SAFE_INTEGER - 1;
+}
+
+function isMobileUpdaterPlatform(platform: UpdaterPlatformName): boolean {
+  return platform === 'android' || platform === 'ios';
 }
 
 function normalizeUpdaterPlatforms(value: unknown): Record<string, UpdaterPlatformEntry> {
@@ -1064,10 +1074,15 @@ function normalizeUpdaterPlatforms(value: unknown): Record<string, UpdaterPlatfo
     const obj = item as Record<string, unknown>;
     const url = trimToString(obj.url);
     if (!url) continue;
-    const signature = trimToString(obj.signature);
     const format = trimToString(obj.format).toLowerCase();
-    if (!signature || !isUpdaterFormat(format)) continue;
-    result[key] = { url, signature, format };
+    if (!isUpdaterFormat(format)) continue;
+    const platform = key.split('-')[0] as UpdaterPlatformName;
+    const signature = trimToString(obj.signature);
+    if (!signature && !isMobileUpdaterPlatform(platform)) continue;
+
+    result[key] = signature
+      ? { url, signature, format }
+      : { url, format };
   }
 
   return result;
@@ -1207,7 +1222,6 @@ export async function uploadUpdaterJson(params: {
   releaseBody?: string | null;
   releaseCreatedAt?: string | null;
   uploadedAssets?: UploadedReleaseAsset[];
-  updaterJsonPreferNsis?: boolean;
   retryAttempts?: number;
   owner?: string;
   repo?: string;
@@ -1221,7 +1235,6 @@ export async function uploadUpdaterJson(params: {
     releaseBody,
     releaseCreatedAt,
     uploadedAssets,
-    updaterJsonPreferNsis = false,
     retryAttempts = 0,
   } = params;
 
@@ -1328,8 +1341,9 @@ export async function uploadUpdaterJson(params: {
     if (!candidate.format) {
       continue;
     }
+    const requiresSignature = !isMobileUpdaterPlatform(candidate.platform);
     const signature = await getSignatureForAsset(candidate.assetName);
-    if (!signature) {
+    if (requiresSignature && !signature) {
       core.warning(
         `Skipping updater entry for "${candidate.assetName}" because no signature asset was available.`,
       );
@@ -1338,15 +1352,16 @@ export async function uploadUpdaterJson(params: {
 
     const entry: UpdaterPlatformEntry = {
       url: candidate.url,
-      signature,
       format: candidate.format,
     };
+    if (signature) {
+      entry.signature = signature;
+    }
 
     const baseKey = `${candidate.platform}-${candidate.arch}`;
     const priority = getUpdaterFormatPriority(
       candidate.platform,
       candidate.format,
-      updaterJsonPreferNsis,
     );
     const existing = baseEntries.get(baseKey);
     if (!existing || priority < existing.priority) {

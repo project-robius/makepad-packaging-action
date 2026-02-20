@@ -24,20 +24,6 @@ import {
 } from './release';
 import type { ReleaseSummary } from './release';
 
-function getBooleanInputWithAlias(
-  primary: string,
-  alias: string | undefined,
-  defaultValue: boolean,
-): boolean {
-  const aliasValue = alias ? normalizeInput(core.getInput(alias)) : undefined;
-  const primaryValue = normalizeInput(core.getInput(primary));
-  const resolved = aliasValue ?? primaryValue;
-  if (resolved === undefined) {
-    return defaultValue;
-  }
-  return parseEnvBool(resolved);
-}
-
 function parseRetryAttempts(value?: string): number {
   const normalized = normalizeInput(value) ?? '0';
   const parsed = Number.parseInt(normalized, 10);
@@ -127,13 +113,8 @@ async function run(): Promise<void> {
     const release_name_input = normalizeInput(core.getInput('releaseName'));
     const release_body_input = normalizeInput(core.getInput('releaseBody'));
     const release_id_input = normalizeInput(core.getInput('releaseId'));
-    const upload_updater_json = getBooleanInputWithAlias(
-      'upload_updater_json',
-      'uploadUpdaterJson',
-      true,
-    );
+    const upload_updater_json = core.getBooleanInput('uploadUpdaterJson');
     const upload_updater_signatures = core.getBooleanInput('uploadUpdaterSignatures');
-    const updater_json_prefer_nsis = core.getBooleanInput('updaterJsonPreferNsis');
     const retry_attempts = parseRetryAttempts(core.getInput('retryAttempts'));
     const asset_name_template = normalizeInput(core.getInput('asset_name_template'));
     const release_asset_name_pattern = normalizeInput(core.getInput('releaseAssetNamePattern'));
@@ -344,7 +325,6 @@ async function run(): Promise<void> {
           releaseBody: releaseSummary?.body,
           releaseCreatedAt: releaseSummary?.created_at,
           uploadedAssets,
-          updaterJsonPreferNsis: updater_json_prefer_nsis,
           retryAttempts: retry_attempts,
           owner: release_owner,
           repo: release_repo,
@@ -422,7 +402,6 @@ async function run(): Promise<void> {
           releaseBody: releaseSummary?.body ?? release_body,
           releaseCreatedAt: releaseSummary?.created_at,
           uploadedAssets,
-          updaterJsonPreferNsis: updater_json_prefer_nsis,
           retryAttempts: retry_attempts,
           owner: release_owner,
           repo: release_repo,

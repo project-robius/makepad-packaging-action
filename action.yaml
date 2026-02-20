@@ -31,20 +31,13 @@ inputs:
   releaseCommitish:
     description: 'Any branch or commit SHA the Git tag is created from, unused if the Git tag already exists. Default: SHA of current commit.'
 
-  upload_updater_json:
-    description: 'Whether to upload a static JSON file for the updater using GitHub Releases as the CDN'
-    default: 'true'
-
   uploadUpdaterJson:
-    description: 'Alias of upload_updater_json.'
+    description: 'Whether to upload/update latest.json updater metadata on the release.'
+    default: 'true'
 
   uploadUpdaterSignatures:
     description: 'Whether to upload .sig files (if present next to built assets) and include them in updater JSON.'
     default: 'true'
-
-  updaterJsonPreferNsis:
-    description: 'For Windows updater JSON default entry, prefer NSIS (.exe) over MSI (.msi) when both exist.'
-    default: 'false'
 
   retryAttempts:
     description: 'Additional retry attempts for uploading release assets and updater JSON when transient API conflicts happen.'

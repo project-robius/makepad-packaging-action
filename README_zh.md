@@ -44,6 +44,9 @@
 - `releaseName`: Release 标题，支持 `__VERSION__` 占位符
 - `releaseBody`: Release 正文（Markdown）
 - `releaseId`: 已存在的 GitHub Release ID（将资产上传到该 release，并跳过创建 release）
+- `uploadUpdaterJson`: 是否上传/更新 `latest.json`（默认：`true`）
+- `uploadUpdaterSignatures`: 是否上传 `.sig` 文件（若与构建产物同名同目录），并写入 `latest.json`（默认：`true`）
+- `retryAttempts`: release 资产与 `latest.json` 上传发生冲突时的额外重试次数（默认：`0`）
 - `asset_name_template`: 资产命名模板（`__APP__`, `__VERSION__`, `__PLATFORM__`, `__ARCH__`, `__MODE__`, `__EXT__`, `__FILENAME__`, `__BASENAME__`）
 - `asset_prefix`: 可选前缀，会追加到生成的资产名之前
 - `releaseDraft`: 是否创建草稿 release（`true`/`false`）
@@ -156,6 +159,10 @@ action 在真机构建时使用 `--device=iPhone`。
 - 上传 release 资产时会优先筛选平台推荐格式（例如 macOS `.dmg`、iOS `.ipa`）
 - 若构建产物是目录（如 `.app`），会先压缩再上传
 - 默认资产名采用唯一模式 `app-version-platform-arch-mode.ext`（除非自定义）
+- 当 `uploadUpdaterJson=true` 时，action 会创建/更新 `latest.json`（`version`, `notes`, `pub_date`, `platforms`）
+- `latest.json` 目前支持从以下已签名格式写入：Windows（`nsis`, `wix`）、Linux（`appimage`）、macOS（`app`）、Android（`apk`）、iOS（`ipa`）
+- 桌面端条目要求签名；移动端（`apk`/`ipa`）允许无 `signature` 写入 `latest.json`
+- 对于缺少 `.sig` 的桌面端资产，`latest.json` 会跳过该条目
 - 上传 release 需要 token 拥有 `contents: write` 权限
 
 ### 占位符替换

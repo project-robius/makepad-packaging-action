@@ -45,10 +45,8 @@ These inputs are already defined in `action.yaml`:
 - `releaseBody`: Release body markdown
 - `releaseId`: existing GitHub Release ID (uploads assets to this release and skips release creation)
 - `releaseCommitish`: branch/commit SHA for creating tag/release (default: current commit SHA)
-- `upload_updater_json`: upload/update `latest.json` updater metadata asset on the release (default: `true`)
-- `uploadUpdaterJson`: alias of `upload_updater_json`
+- `uploadUpdaterJson`: upload/update `latest.json` updater metadata asset on the release (default: `true`)
 - `uploadUpdaterSignatures`: upload `.sig` files (if present next to built assets) and include signatures in `latest.json` (default: `true`)
-- `updaterJsonPreferNsis`: for Windows updater default key, prefer NSIS (`.exe`) over MSI (`.msi`) when both exist (default: `false`, meaning MSI preferred)
 - `retryAttempts`: additional retry attempts for release-asset/latest.json upload conflicts (default: `0`)
 - `owner`: release target repository owner (default: current repo owner)
 - `repo`: release target repository name (default: current repo name)
@@ -193,9 +191,11 @@ It writes a temporary `AuthKey_<KEY_ID>.p8` file and maps them to `APPLE_API_*` 
 - Release upload filters to recommended formats per platform when available (e.g. macOS `.dmg`, iOS `.ipa`)
 - If an artifact is a directory (like `.app`), it is zipped before upload
 - Asset names default to a unique `app-version-platform-arch-mode.ext` pattern unless overridden
-- By default, release upload also creates/updates a `latest.json` asset (`version`, `notes`, `pub_date`, `platforms`) suitable for static updater metadata hosted on GitHub Releases CDN
+- When `uploadUpdaterJson=true`, release upload creates/updates a `latest.json` asset (`version`, `notes`, `pub_date`, `platforms`) suitable for static updater metadata hosted on GitHub Releases CDN
 - For draft releases, updater URLs are generated using the release tag (`/releases/download/<tag>/<asset>`) and become publicly downloadable after the release is published
+- `latest.json` entries are currently mapped from signed assets with formats: Windows (`nsis`, `wix`), Linux (`appimage`), macOS (`app`), Android (`apk`), iOS (`ipa`)
 - If `<artifact>.sig` exists next to an uploaded artifact and `uploadUpdaterSignatures=true`, it is uploaded as `<asset>.sig` and used as `signature` in `latest.json`
+- Desktop entries require signatures in `latest.json`; mobile entries (`apk`/`ipa`) are allowed without `signature`
 - Upload steps support retries via `retryAttempts` to reduce failures from concurrent asset conflicts
 - Release upload requires a token with `contents: write` permission
 
@@ -209,6 +209,7 @@ When `tagName` or `releaseName` contains `__VERSION__`, it is replaced with the 
 - Instead, place signature files beside built artifacts using the `<artifact>.sig` naming convention.
 - Example: if an uploaded asset resolves to `robrix-1.2.3-windows-x86_64-release.exe`, provide a file ending with `.exe.sig` for that artifact source path.
 - With `uploadUpdaterSignatures=true` (default), the action uploads those `.sig` files and writes them into `latest.json` under each matched platform entry.
+- Desktop entries without a corresponding `.sig` are skipped from `latest.json`.
 
 ### Release Modes
 
