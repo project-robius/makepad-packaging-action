@@ -124,7 +124,15 @@ export function execCommand(
       if (code === 0) {
         resolve({ code: 0, output, matched });
       } else {
-        reject(new Error(`${cmd} exited with code ${code}`));
+        const error = new Error(`${cmd} exited with code ${code}`) as Error & {
+          output?: string;
+          exitCode?: number;
+        };
+        if (options.captureOutput) {
+          error.output = output;
+        }
+        error.exitCode = code ?? undefined;
+        reject(error);
       }
     });
   });

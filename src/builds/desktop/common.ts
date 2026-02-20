@@ -9,6 +9,7 @@ import {
   parse_manifest_toml,
   resolveManifestPackageField,
   retry,
+  sleep,
 } from "../../utils";
 
 interface DesktopPackagingToolsInfo {
@@ -250,6 +251,55 @@ function hasMacosNotarizationEnv(env: NodeJS.ProcessEnv): boolean {
   return false;
 }
 
+function shouldRetryMacosPackagerFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const output = (error as { output?: string } | undefined)?.output ?? "";
+  const text = `${message}\n${output}`.toLowerCase();
+  return text.includes("resource busy") || text.includes("create-dmg");
+}
+
+async function cleanupMacosDmgBusyState(volumeName: string, outDir: string): Promise<void> {
+  try {
+    const mountPath = `/Volumes/${volumeName}`;
+    const info = await execCommand("hdiutil", ["info"], { captureOutput: true });
+    const devices = new Set<string>();
+    for (const line of info.output.split("\n")) {
+      if (!line.includes(mountPath)) continue;
+      const device = line.trim().split(/\s+/)[0];
+      if (device?.startsWith("/dev/disk")) {
+        devices.add(device);
+      }
+    }
+
+    for (const device of devices) {
+      try {
+        console.warn(`Detaching mounted DMG device before retry: ${device}`);
+        await execCommand("hdiutil", ["detach", device, "-force"]);
+      } catch (detachError) {
+        console.warn(`Failed to detach ${device}: ${(detachError as Error).message}`);
+      }
+    }
+  } catch (scanError) {
+    console.warn(`Failed to inspect mounted DMG devices: ${(scanError as Error).message}`);
+  }
+
+  if (!existsSync(outDir)) {
+    return;
+  }
+
+  for (const entry of readdirSync(outDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.toLowerCase().endsWith(".dmg")) continue;
+    const path = join(outDir, entry.name);
+    try {
+      rmSync(path, { force: true });
+      console.warn(`Removed stale DMG before retry: ${path}`);
+    } catch (removeError) {
+      console.warn(`Failed to remove stale DMG ${path}: ${(removeError as Error).message}`);
+    }
+  }
+}
+
 export async function buildDesktopArtifactsForPlatform(
   root: string,
   initOptions: InitOptions,
@@ -258,7 +308,7 @@ export async function buildDesktopArtifactsForPlatform(
 ): Promise<Artifact[]> {
   await checkAndInstallDesktopPackagingTools();
 
-  const { app_version, out_dir } = resolveDesktopDefaults(root, initOptions);
+  const { app_name, app_version, out_dir } = resolveDesktopDefaults(root, initOptions);
   const target_info = buildOptions.target_info ?? getTargetInfo();
   const args = buildOptions.args ?? [];
   const packager_args = buildOptions.packager_args ?? [];
@@ -296,10 +346,29 @@ export async function buildDesktopArtifactsForPlatform(
   }
 
   try {
-    await execCommand("cargo", ["packager", ...packager_cli_args], {
-      cwd: root,
-      env: command_env,
-    });
+    const maxPackagerAttempts = platform === "macos" ? 3 : 1;
+    for (let attempt = 1; attempt <= maxPackagerAttempts; attempt++) {
+      try {
+        await execCommand("cargo", ["packager", ...packager_cli_args], {
+          cwd: root,
+          env: command_env,
+          captureOutput: platform === "macos",
+        });
+        break;
+      } catch (error) {
+        const isLastAttempt = attempt === maxPackagerAttempts;
+        if (platform !== "macos" || isLastAttempt || !shouldRetryMacosPackagerFailure(error)) {
+          throw error;
+        }
+
+        console.warn(
+          `cargo packager failed on macOS (attempt ${attempt}/${maxPackagerAttempts}): ${(error as Error).message}`,
+        );
+        console.warn("Retrying after cleaning mounted/stale DMG resources...");
+        await cleanupMacosDmgBusyState(app_name, out_dir);
+        await sleep(2000 * attempt);
+      }
+    }
   } finally {
     if (generated_notary_temp_dir) {
       rmSync(generated_notary_temp_dir, { recursive: true, force: true });
