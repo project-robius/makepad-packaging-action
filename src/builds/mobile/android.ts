@@ -1,5 +1,5 @@
-import { existsSync } from "fs";
-import { join } from "path";
+import { existsSync, readdirSync } from "fs";
+import { basename, join } from "path";
 import type { AndroidABI, AndroidVariant, Artifact, BuildOptions, TargetArch } from "../../types";
 import { execCommand, retry } from "../../utils";
 
@@ -124,10 +124,17 @@ export async function buildAndroidArtifacts(
     ], { cwd: root });
 
     const apk_file_name = `${apk_prefix}_debug.apk`;
-    const apk_build_path = resolveAndroidApkBuildPath(root, main_binary_name, apk_file_name);
+    const apk_path = resolveAndroidApkPath(
+      root,
+      main_binary_name,
+      apk_file_name,
+      app_version,
+      resolved_abi,
+      "debug",
+    );
 
     return [{
-      path: join(apk_build_path, apk_file_name),
+      path: apk_path,
       mode: 'debug',
       version: app_version,
       platform: 'android',
@@ -151,10 +158,17 @@ export async function buildAndroidArtifacts(
     ], { cwd: root });
 
     const apk_file_name = `${apk_prefix}.apk`;
-    const apk_build_path = resolveAndroidApkBuildPath(root, main_binary_name, apk_file_name);
+    const apk_path = resolveAndroidApkPath(
+      root,
+      main_binary_name,
+      apk_file_name,
+      app_version,
+      resolved_abi,
+      "release",
+    );
 
     return [{
-      path: join(apk_build_path, apk_file_name),
+      path: apk_path,
       mode: 'release',
       version: app_version,
       platform: 'android',
@@ -163,7 +177,14 @@ export async function buildAndroidArtifacts(
   }
 }
 
-function resolveAndroidApkBuildPath(root: string, main_binary_name: string, apk_file_name: string): string {
+function resolveAndroidApkPath(
+  root: string,
+  main_binary_name: string,
+  apk_file_name: string,
+  app_version: string,
+  resolved_abi: Exclude<AndroidABI, 'all'>,
+  mode: "debug" | "release",
+): string {
   const apk_build_paths = [
     join(root, 'android', 'makepad-android-apk', main_binary_name, 'apk'),
     join(root, 'target', 'makepad-android-apk', main_binary_name, 'apk'),
@@ -172,11 +193,33 @@ function resolveAndroidApkBuildPath(root: string, main_binary_name: string, apk_
   for (const apk_build_path of apk_build_paths) {
     const apk_path = join(apk_build_path, apk_file_name);
     if (existsSync(apk_path)) {
-      return apk_build_path;
+      return apk_path;
     }
   }
 
-  return apk_build_paths[0];
+  const discovered_apk_paths = apk_build_paths
+    .filter((apk_build_path) => existsSync(apk_build_path))
+    .flatMap((apk_build_path) =>
+      readdirSync(apk_build_path)
+        .filter((entry) => entry.endsWith(".apk"))
+        .map((entry) => join(apk_build_path, entry))
+    );
+
+  if (discovered_apk_paths.length === 0) {
+    return join(apk_build_paths[0], apk_file_name);
+  }
+
+  const mode_suffix = mode === "debug" ? "_debug.apk" : ".apk";
+  const preferred_apk_paths = discovered_apk_paths.filter((apk_path) => {
+    const apk_name = basename(apk_path);
+    return apk_name.includes(`_v${app_version}_`) && apk_name.includes(`_${resolved_abi}`) && apk_name.endsWith(mode_suffix);
+  });
+
+  const resolved_apk_path = preferred_apk_paths[0] ?? discovered_apk_paths[0];
+  console.warn(
+    `⚠️  Expected Android APK "${apk_file_name}" was not found. Using discovered artifact "${resolved_apk_path}" instead.`
+  );
+  return resolved_apk_path;
 }
 
 function resolveAndroidAbi(requested: AndroidABI | undefined, arch: TargetArch): Exclude<AndroidABI, 'all'> {
