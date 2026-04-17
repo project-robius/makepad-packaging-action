@@ -187,6 +187,7 @@ function resolveAndroidApkPath(
 ): string {
   const apk_build_paths = [
     join(root, 'android', 'makepad-android-apk', main_binary_name, 'apk'),
+    join(root, 'target', 'android', 'makepad-android-apk', main_binary_name, 'apk'),
     join(root, 'target', 'makepad-android-apk', main_binary_name, 'apk'),
   ];
 
