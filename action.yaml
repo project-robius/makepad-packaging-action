@@ -16,6 +16,17 @@ inputs:
   packager_args:
     description: 'Extra arguments passed only to `cargo packager` (e.g., `--verbose`).'
 
+  verify_deb:
+    description: 'Verify each built .deb declares every runtime dependency it actually uses, by running `robius-packaging-commands verify-deb` on it BEFORE any artifact is uploaded. Requires `robius-packaging-commands` on PATH.'
+    default: 'false'
+
+  verify_deb_args:
+    description: 'Extra arguments passed to `verify-deb` (e.g. `--host` to skip the container, `--image ubuntu:22.04` to test a specific distro, `--run-secs 20`).'
+
+  verify_strict:
+    description: 'When true (default), a failed .deb verification fails the job and nothing is uploaded. Set to false to report failures as warnings and upload anyway.'
+    default: 'true'
+
   tagName:
     description: 'GitHub Release tag name. Supports `__VERSION__` placeholder.'
 

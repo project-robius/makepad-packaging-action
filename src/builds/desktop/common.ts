@@ -58,6 +58,10 @@ async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingT
     ["install", "--force", "--locked", "cargo-packager"],
   );
 
+  // 0.3.0 computes .deb deps with `dpkg-shlibdeps` (plus dlopen/exec detection) and
+  // adds the `verify-deb` subcommand the `verify_deb` input needs. Installed from
+  // crates.io rather than git so the version is exact and immutable -- a `--git`
+  // install tracks the default branch and breaks as soon as it bumps.
   const robius_packaging_commands_info = await ensureCargoToolInstalled(
     "robius-packaging-commands",
     "robius-packaging-commands",
@@ -66,9 +70,7 @@ async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingT
       "--force",
       "--locked",
       "--version",
-      "0.2.1",
-      "--git",
-      "https://github.com/project-robius/robius-packaging-commands.git",
+      "0.3.0",
       "robius-packaging-commands",
     ],
   );
