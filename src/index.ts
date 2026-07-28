@@ -15,6 +15,7 @@ import {
   resolveAppStoreConnectApiKey,
 } from './utils';
 import { uploadToTestFlight } from './builds/mobile/ios/testflight';
+import { verifyDebArtifacts } from './verify';
 import {
   cleanupDuplicateReleases,
   ensureRelease,
@@ -67,6 +68,10 @@ async function run(): Promise<void> {
     const enable_macos_notarization_input = core.getBooleanInput('enable_macos_notarization');
 
     const identifier = normalizeInput(core.getInput('identifier'));
+
+    const verify_deb = core.getBooleanInput('verify_deb'); // default: false
+    const verify_strict = core.getBooleanInput('verify_strict'); // default: true
+    const verify_deb_args = stringArgv(core.getInput('verify_deb_args'));
 
     const packager_args = stringArgv(core.getInput('packager_args'));
     const packager_formats_input = core.getInput('packager_formats');
@@ -258,6 +263,15 @@ async function run(): Promise<void> {
       core.setOutput('app_version', resolved_app_version);
     }
     core.setOutput('artifacts', JSON.stringify(artifacts));
+
+    // 2b) Verify .deb dependency completeness before anything is published, so a
+    // package missing a runtime dependency fails the job instead of reaching a release.
+    if (verify_deb) {
+      await verifyDebArtifacts(artifacts, {
+        extraArgs: verify_deb_args,
+        strict: verify_strict,
+      });
+    }
 
     const release_metadata_provided = Boolean(
       release_name_input || release_body_input || release_draft || prerelease

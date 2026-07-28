@@ -40,6 +40,9 @@ These inputs are already defined in `action.yaml`:
 - `args`: extra args passed to build commands (e.g. `--release --target x86_64-unknown-linux-gnu`)
 - `packager_formats`: comma-separated formats for `cargo packager` (e.g. `deb,dmg,nsis`)
 - `packager_args`: extra args passed only to `cargo packager`
+- `verify_deb`: verify each built `.deb` declares every runtime dependency it actually uses, **before any artifact is uploaded** (default: `false`). See [Verifying `.deb` dependencies](#verifying-deb-dependencies).
+- `verify_deb_args`: extra args passed to `verify-deb` (e.g. `--host`, `--image ubuntu:22.04`, `--run-secs 20`)
+- `verify_strict`: when `true` (default), a failed verification fails the job and nothing is uploaded; `false` reports warnings and uploads anyway
 - `tagName`: GitHub Release tag, supports `__VERSION__` placeholder. If omitted and the workflow runs on a tag ref, that tag is used.
 - `releaseName`: Release title, supports `__VERSION__` placeholder
 - `releaseBody`: Release body markdown
@@ -183,6 +186,7 @@ It writes a temporary `AuthKey_<KEY_ID>.p8` file and maps them to `APPLE_API_*` 
 - Install packaging tools per target (`cargo-packager`, `cargo-makepad`)
 - Build artifacts and collect outputs into a normalized list
 - Android package names are normalized to valid Java identifiers (e.g. `dora-studio` → `dora_studio`)
+- When `verify_deb=true`, `.deb` dependency verification runs after the build and **before any upload**, so a package with a missing runtime dependency never reaches a release
 - If `releaseId` provided, upload artifacts to that release (no release creation)
 - If `tagName` provided (and `releaseId` not set), create/update a GitHub Release and upload artifacts
 - Note: GitHub Release creation is not atomic. If multiple jobs call the action with the same `tagName`, they can race and create separate drafts; prefer a single create-release job and pass `releaseId` to each job to keep assets together.
@@ -198,6 +202,48 @@ It writes a temporary `AuthKey_<KEY_ID>.p8` file and maps them to `APPLE_API_*` 
 - Desktop entries require signatures in `latest.json`; mobile entries (`apk`/`ipa`) are allowed without `signature`
 - Upload steps support retries via `retryAttempts` to reduce failures from concurrent asset conflicts
 - Release upload requires a token with `contents: write` permission
+
+### Verifying `.deb` dependencies
+
+A `.deb` declares its runtime dependencies, but they cannot be fully derived by
+static analysis: `dpkg-shlibdeps` sees only linked libraries, so anything loaded
+via `dlopen` (OpenGL/EGL, D-Bus) or spawned as a program (`xdg-open`) is invisible
+to it. A package can therefore install cleanly and then fail to start.
+
+Setting `verify_deb: true` runs `robius-packaging-commands verify-deb` on every
+built `.deb` **before any artifact is uploaded**. It installs the package into a
+minimal container using only its declared `Depends` (which also proves
+installability), boots the app under `strace`, and fails if the app loads a
+library or spawns a program that no declared dependency provides. On failure it
+prints the exact packages that are missing and the command that adds them.
+
+`robius-packaging-commands` must be on `PATH`; install it in an earlier step:
+
+```yaml
+- run: cargo install robius-packaging-commands --locked
+
+- uses: project-robius/makepad-packaging-action@v1
+  with:
+    packager_formats: deb
+    releaseId: ${{ needs.create_release.outputs.release_id }}
+    verify_deb: true
+```
+
+Container mode needs a container engine on the runner (GitHub-hosted Linux
+runners have Docker preinstalled). Pass `--host` via `verify_deb_args` to check
+against the runner itself instead, which needs no container but is a weaker test.
+
+While rolling this out, `verify_strict: false` reports problems as warnings
+without blocking uploads:
+
+```yaml
+    verify_deb: true
+    verify_strict: false
+```
+
+Note that verification observes only the code paths a short boot exercises, so a
+pass means the startup-critical dependencies are present, not that the dependency
+list is provably complete.
 
 ### Placeholder replacement
 
