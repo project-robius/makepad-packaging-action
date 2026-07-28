@@ -58,11 +58,12 @@ async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingT
     ["install", "--force", "--locked", "cargo-packager"],
   );
 
-  // 0.3.1 computes .deb deps with `dpkg-shlibdeps` (plus dlopen/exec detection) and
-  // adds the `verify-deb` subcommand the `verify_deb` input needs. Earlier 0.3.x
-  // failed verify-deb on any app that can't fully boot headless. Installed from
-  // crates.io rather than git so the version is exact and immutable -- a `--git`
-  // install tracks the default branch and breaks as soon as it bumps.
+  // 0.3.2 computes .deb deps with `dpkg-shlibdeps` (plus dlopen/exec detection) and
+  // adds the `verify-deb` subcommand the `verify_deb` input needs. It's also the first
+  // version that falls back to apt-file for a dlopen'd lib that isn't installed on the
+  // build host, instead of quietly leaving the dependency out. Installed from crates.io
+  // rather than git so the version is exact and immutable -- a `--git` install tracks
+  // the default branch and breaks as soon as it bumps.
   const robius_packaging_commands_info = await ensureCargoToolInstalled(
     "robius-packaging-commands",
     "robius-packaging-commands",
@@ -71,7 +72,7 @@ async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingT
       "--force",
       "--locked",
       "--version",
-      "0.3.1",
+      "0.3.2",
       "robius-packaging-commands",
     ],
   );
@@ -303,6 +304,36 @@ async function cleanupMacosDmgBusyState(volumeName: string, outDir: string): Pro
   }
 }
 
+/**
+ * Makes `apt-file` available before building a .deb, so the packaging tool can work out
+ * which package ships a dlopen'd library.
+ *
+ * It normally asks the local filesystem (`ldconfig` + `dpkg -S`), which only works if the
+ * library happens to be installed. A CI runner has no GPU or desktop stack, so e.g.
+ * libEGL isn't there and the dependency would go missing. apt-file answers from the
+ * archive's file lists instead, so it doesn't matter what's installed here.
+ *
+ * Best-effort: if this fails, the packaging tool still errors out with a clear message
+ * rather than quietly dropping the dependency.
+ */
+async function ensureAptFileIndex(): Promise<void> {
+  try {
+    if (!isCommandAvailable("apt-file").installed) {
+      console.log("apt-file not found, installing...");
+      await execCommand("sudo", ["apt-get", "update", "-qq"]);
+      await execCommand("sudo", ["apt-get", "install", "-y", "-qq", "apt-file"]);
+    }
+    // Roughly 20s and 300MB of index, which is cheap next to the build itself.
+    console.log("Updating apt-file index so dlopen'd libraries can be resolved...");
+    await execCommand("sudo", ["apt-file", "update"]);
+  } catch (error) {
+    console.warn(
+      `Could not set up apt-file (${error instanceof Error ? error.message : String(error)}). ` +
+      "Dependencies for dlopen'd libraries that aren't installed here may not be resolvable.",
+    );
+  }
+}
+
 export async function buildDesktopArtifactsForPlatform(
   root: string,
   initOptions: InitOptions,
@@ -318,6 +349,10 @@ export async function buildDesktopArtifactsForPlatform(
   const packager_formats = buildOptions.packager_formats ?? [];
 
   assertNoLikelyPackagerTargetMismatch(root, args);
+
+  if (platform === "linux" && packager_formats.some((f) => f.toLowerCase() === "deb")) {
+    await ensureAptFileIndex();
+  }
 
   const packager_cli_args = [...args, ...packager_args];
   const has_formats_arg = packager_cli_args.some((arg) => arg.startsWith("--formats"));
