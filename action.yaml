@@ -7,7 +7,7 @@ branding:
 
 inputs:
   args:
-    description: 'Arguments for the `cargo build <args>` and `cargo makepad <args>` commands. For example, `--release --target x86_64-pc-windows-msvc`.'
+    description: 'Extra build arguments, e.g. `--target x86_64-pc-windows-msvc`. Forwarded to `cargo packager` on desktop; on mobile only `--target` is read and the rest is ignored. `--release` is added automatically.'
 
 
   packager_formats:
@@ -17,10 +17,10 @@ inputs:
     description: 'Extra arguments passed only to `cargo packager` (e.g., `--verbose`).'
 
   robius_packaging_commands_version:
-    description: 'Pin the version of `robius-packaging-commands` installed for desktop packaging (e.g., `0.3.3`). Defaults to the latest published version. A pinned version is installed even if another one is already on PATH.'
+    description: 'Pin the version of `robius-packaging-commands` installed for desktop packaging (e.g., `0.3.3`). A pinned version is installed even if another one is already on PATH. When unset, a copy already on PATH is reused and otherwise the latest published version is installed.'
 
   verify_deb:
-    description: 'Verify each built .deb declares every runtime dependency it actually uses, by running `robius-packaging-commands verify-deb` on it BEFORE any artifact is uploaded. Requires `robius-packaging-commands` on PATH.'
+    description: 'Verify each built .deb declares every runtime dependency it actually uses, by running `robius-packaging-commands verify-deb` on it BEFORE any artifact is uploaded.'
     default: 'false'
 
   verify_deb_args:
@@ -115,7 +115,7 @@ inputs:
     default: 'false'
 
   upload_to_testflight:
-    description: 'Whether to upload iOS IPA to TestFlight (default: false). This input takes precedence over MAKEPAD_IOS_UPLOAD_TESTFLIGHT.'
+    description: 'Whether to upload iOS IPA to TestFlight (default: false). This input is OR-ed with MAKEPAD_IOS_UPLOAD_TESTFLIGHT, so either one enables the upload.'
     default: 'false'
 
   enable_macos_notarization:
@@ -132,7 +132,7 @@ outputs:
   release_id:
     description: 'GitHub Release ID used for upload (if any).'
   release_url:
-    description: 'GitHub Release URL (if created).'
+    description: 'GitHub Release URL, set both when a release is created and when uploading to an existing releaseId.'
 
 runs:
   using: node24

@@ -33,13 +33,13 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Package (iOS)
-        uses: Project-Robius-China/makepad-packaging-action@main
+        uses: project-robius/makepad-packaging-action@v1.7.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAKEPAD_IOS_ORG: ${{ inputs.ios_org }}

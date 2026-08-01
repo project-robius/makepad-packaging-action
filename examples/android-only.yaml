@@ -56,13 +56,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Package (android)
-        uses: Project-Robius-China/makepad-packaging-action@main
+        uses: project-robius/makepad-packaging-action@v1.7.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAKEPAD_ANDROID_ABI: ${{ inputs.android_abi }}

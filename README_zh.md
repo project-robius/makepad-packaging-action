@@ -2,6 +2,10 @@
 
 [English](README.md) | [简体中文](README_zh.md)
 
+> **注意**：本中文文档目前落后于英文版若干个版本，缺少 v1.6.0 之后新增的输入项和行为说明
+> （例如 `verify_deb`、`robius_packaging_commands_version`，以及 `cargo-makepad` 版本匹配规则）。
+> 请以 [English README](README.md) 为准。
+
 ## 打包说明
 
 ### 桌面端
@@ -28,7 +32,7 @@
 
 ### 目标
 
-- 为 Makepad 的桌面端、移动端和 Web 目标提供一步打包
+- 为 Makepad 的桌面端和移动端目标提供一步打包（暂不支持 Web）
 - 支持上传到 GitHub Release，并可选使用 tag/name/body 模板
 - 从 `Cargo.toml` 自动推导合理默认值
 - 适配矩阵构建（通过 `args` 传入特定 target triple）
