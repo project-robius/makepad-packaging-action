@@ -1,0 +1,64 @@
+name: Linux .deb (Verify Dependencies)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (optional, supports __VERSION__)"
+        type: string
+        default: ""
+      verify_strict:
+        description: "Fail the job when verification fails (false uploads anyway)"
+        type: boolean
+        default: true
+      robius_packaging_commands_version:
+        description: "Pin robius-packaging-commands (optional, e.g. 0.3.3)"
+        type: string
+        default: "0.3.3"
+      args:
+        description: "Extra args passed to the action"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+# Single-job example: using tagName is fine here. For multi-job/matrix builds, create the release once
+# and pass releaseId to each job to keep assets together.
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config llvm clang libclang-dev binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev libwayland-dev libxkbcommon-dev libegl1
+
+      - name: Package (desktop)
+        uses: project-robius/makepad-packaging-action@v1.7.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          packager_formats: deb
+          # Runs `robius-packaging-commands verify-deb` on every built .deb before anything is
+          # uploaded, so a package that is missing a runtime dependency never reaches the release.
+          verify_deb: true
+          # Optional extras for verify-deb. It uses a container by default, so pass --host to
+          # check against the runner itself instead.
+          verify_deb_args: --image ubuntu:22.04
+          # False reports a failed verification as a warning and uploads anyway, which is handy
+          # while rolling this out.
+          verify_strict: ${{ inputs.verify_strict }}
+          # Pins the version of robius-packaging-commands used for packaging and verification.
+          # Leave empty to reuse a copy already on PATH, or install the latest one if there is none.
+          robius_packaging_commands_version: ${{ inputs.robius_packaging_commands_version }}
+          args: ${{ inputs.args }}
+          tagName: ${{ inputs.release_tag }}

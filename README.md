@@ -7,6 +7,37 @@ Linux, Android and iOS, and optionally upload the results to a GitHub Release.
 
 Ready-to-copy workflows live in [`examples/`](examples/).
 
+## Contents
+
+- [Quick start](#quick-start)
+- [Packaging Details](#packaging-details)
+  - [For Desktop](#for-desktop)
+  - [For Mobile](#for-mobile)
+  - [Platform-specific considerations](#platform-specific-considerations)
+- [Action Reference](#action-reference)
+  - [Goals](#goals)
+  - [Inputs](#inputs)
+  - [Environment variables](#environment-variables)
+  - [Packaging tool versions](#packaging-tool-versions)
+  - [Outputs](#outputs)
+  - [How it works](#how-it-works)
+  - [Behavior notes](#behavior-notes)
+  - [Verifying `.deb` dependencies](#verifying-deb-dependencies)
+  - [iOS (cargo-makepad) reference](#ios-cargo-makepad-reference)
+  - [macOS signing and notarization convenience](#macos-signing-and-notarization-convenience)
+  - [Updater signatures](#updater-signatures)
+  - [Placeholder replacement](#placeholder-replacement)
+  - [Release Modes](#release-modes)
+  - [iOS signing convenience](#ios-signing-convenience)
+  - [Example: matrix release](#example-matrix-release)
+  - [Example: upload to an existing release](#example-upload-to-an-existing-release)
+  - [Example: Android only](#example-android-only)
+- [Development](#development)
+  - [Current implementation status](#current-implementation-status)
+  - [Roadmap](#roadmap)
+- [Contributing](CONTRIBUTING.md)
+- [License](LICENSE)
+
 ## Quick start
 
 The action builds and packages, but it does not check out your code or install a Rust
@@ -23,9 +54,9 @@ jobs:
       # Makepad's Linux system dependencies. Not needed on macOS or Windows.
       - run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev libsqlite3-dev pkg-config binutils \
-            llvm clang libclang-dev libxcursor-dev libx11-dev libasound2-dev \
-            libpulse-dev libwayland-dev libxkbcommon-dev libegl1
+          sudo apt-get install -y libssl-dev pkg-config llvm clang libclang-dev \
+            binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
+            libwayland-dev libxkbcommon-dev libegl1
 
       - uses: project-robius/makepad-packaging-action@v1.7.0
         with:
@@ -39,12 +70,15 @@ builds to stay reproducible.
 
 ### For Desktop
 
-`cargo-packager` and `robius-packaging-commands` are used under the hood to create the
-packages. Both are installed for you; see [Packaging tool versions](#packaging-tool-versions).
+[`cargo-packager`](https://github.com/crabnebula-dev/cargo-packager) and
+[`robius-packaging-commands`](https://github.com/project-robius/robius-packaging-commands)
+are used under the hood to create the packages. Both are installed for you; see
+[Packaging tool versions](#packaging-tool-versions).
 
 ### For Mobile
 
-`cargo-makepad` is used to build the mobile applications for iOS and Android platforms.
+[`cargo-makepad`](https://github.com/makepad/makepad/tree/dev/tools/cargo_makepad) is used
+to build the mobile applications for iOS and Android platforms.
 
 It is installed from the exact makepad revision your `Cargo.lock` pins for
 `makepad-widgets`, so the build tool always matches the makepad your app depends on,

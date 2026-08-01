@@ -45,7 +45,6 @@ jobs:
           MAKEPAD_IOS_ORG: ${{ inputs.ios_org }}
           MAKEPAD_IOS_APP: ${{ inputs.ios_app }}
           MAKEPAD_IOS_CREATE_IPA: ${{ inputs.create_ipa }}
-          MAKEPAD_IOS_UPLOAD_TESTFLIGHT: ${{ inputs.upload_testflight }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
@@ -55,4 +54,6 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         with:
+          # Enabling the upload forces an IPA build, even when create_ipa is off.
+          upload_to_testflight: ${{ inputs.upload_testflight }}
           args: --target aarch64-apple-ios ${{ inputs.args }}
