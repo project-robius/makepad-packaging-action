@@ -16,6 +16,9 @@ inputs:
   packager_args:
     description: 'Extra arguments passed only to `cargo packager` (e.g., `--verbose`).'
 
+  robius_packaging_commands_version:
+    description: 'Pin the version of `robius-packaging-commands` installed for desktop packaging (e.g., `0.3.3`). Defaults to the latest published version. A pinned version is installed even if another one is already on PATH.'
+
   verify_deb:
     description: 'Verify each built .deb declares every runtime dependency it actually uses, by running `robius-packaging-commands verify-deb` on it BEFORE any artifact is uploaded. Requires `robius-packaging-commands` on PATH.'
     default: 'false'

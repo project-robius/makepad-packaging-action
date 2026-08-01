@@ -27,9 +27,10 @@ async function ensureCargoToolInstalled(
   command: string,
   label: string,
   installArgs: string[],
+  forceReinstall = false,
 ): Promise<{ installed: boolean; path?: string }> {
   const { installed, path } = isCommandAvailable(command);
-  if (installed) {
+  if (installed && !forceReinstall) {
     console.log(`${label} is already installed.`);
     return { installed, path };
   }
@@ -51,19 +52,17 @@ async function ensureCargoToolInstalled(
   return { installed: verify.installed, path: verify.path };
 }
 
-async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingToolsInfo> {
+async function checkAndInstallDesktopPackagingTools(
+  robiusPackagingCommandsVersion?: string,
+): Promise<DesktopPackagingToolsInfo> {
   const cargo_packager_info = await ensureCargoToolInstalled(
     "cargo-packager",
     "cargo-packager",
     ["install", "--force", "--locked", "cargo-packager"],
   );
 
-  // 0.3.2 computes .deb deps with `dpkg-shlibdeps` (plus dlopen/exec detection) and
-  // adds the `verify-deb` subcommand the `verify_deb` input needs. It's also the first
-  // version that falls back to apt-file for a dlopen'd lib that isn't installed on the
-  // build host, instead of quietly leaving the dependency out. Installed from crates.io
-  // rather than git so the version is exact and immutable -- a `--git` install tracks
-  // the default branch and breaks as soon as it bumps.
+  // From crates.io rather than git so a pinned version is exact; a `--git` install tracks
+  // the default branch. An explicitly pinned version wins over whatever's already on PATH.
   const robius_packaging_commands_info = await ensureCargoToolInstalled(
     "robius-packaging-commands",
     "robius-packaging-commands",
@@ -71,10 +70,12 @@ async function checkAndInstallDesktopPackagingTools(): Promise<DesktopPackagingT
       "install",
       "--force",
       "--locked",
-      "--version",
-      "0.3.2",
+      ...(robiusPackagingCommandsVersion
+        ? ["--version", robiusPackagingCommandsVersion]
+        : []),
       "robius-packaging-commands",
     ],
+    robiusPackagingCommandsVersion !== undefined,
   );
 
   return {
@@ -340,7 +341,7 @@ export async function buildDesktopArtifactsForPlatform(
   buildOptions: BuildOptions,
   platform: DesktopTarget,
 ): Promise<Artifact[]> {
-  await checkAndInstallDesktopPackagingTools();
+  await checkAndInstallDesktopPackagingTools(buildOptions.robius_packaging_commands_version);
 
   const { app_name, app_version, out_dir } = resolveDesktopDefaults(root, initOptions);
   const target_info = buildOptions.target_info ?? getTargetInfo();

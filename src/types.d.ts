@@ -15,6 +15,7 @@ export interface BuildOptions {
   main_binary_name?: string;
   packager_args?: string[];
   packager_formats?: string[];
+  robius_packaging_commands_version?: string;
   mobile_cargo_extra_args?: string[];
   android_cargo_extra_args?: string[];
   ios_cargo_extra_args?: string[];

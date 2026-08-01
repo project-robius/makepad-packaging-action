@@ -33,7 +33,7 @@ export async function buildProject(
   if (target_platform_type === "desktop") {
     return await buildDesktopArtifacts(root, initOptions, buildOptions);
   } else if (target_platform_type === "mobile") {
-    await checkAndInstallMobilePackagingTools();
+    await checkAndInstallMobilePackagingTools(root);
     return await buildMobileArtifacts(root, initOptions, buildOptions);
   } else {
     throw new Error(`Unsupported target type: ${target_platform_type}`);

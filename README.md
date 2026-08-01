@@ -14,6 +14,8 @@ Use the following tools to create an installer or package for your Makepad appli
 
 `cargo-makepad` is used to build the mobile applications for iOS and Android platforms.
 
+It is installed from the exact makepad revision your `Cargo.lock` pins for `makepad-widgets`, so the build tool always matches the makepad your app depends on, including forks. Apps that don't depend on makepad via git get `cargo-makepad` from upstream `dev`.
+
 ### Platform-specific considerations
 
 Note: that due to platform restrictions, you can currently only build:
@@ -40,6 +42,7 @@ These inputs are already defined in `action.yaml`:
 - `args`: extra args passed to build commands (e.g. `--release --target x86_64-unknown-linux-gnu`)
 - `packager_formats`: comma-separated formats for `cargo packager` (e.g. `deb,dmg,nsis`)
 - `packager_args`: extra args passed only to `cargo packager`
+- `robius_packaging_commands_version`: pin the version of `robius-packaging-commands` installed for desktop packaging (e.g. `0.3.3`). Defaults to the latest published version, and a pinned version is installed even if another one is already on PATH.
 - `verify_deb`: verify each built `.deb` declares every runtime dependency it actually uses, **before any artifact is uploaded** (default: `false`). See [Verifying `.deb` dependencies](#verifying-deb-dependencies).
 - `verify_deb_args`: extra args passed to `verify-deb` (e.g. `--host`, `--image ubuntu:22.04`, `--run-secs 20`)
 - `verify_strict`: when `true` (default), a failed verification fails the job and nothing is uploaded; `false` reports warnings and uploads anyway

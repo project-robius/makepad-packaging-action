@@ -73,6 +73,10 @@ async function run(): Promise<void> {
     const verify_strict = core.getBooleanInput('verify_strict'); // default: true
     const verify_deb_args = stringArgv(core.getInput('verify_deb_args'));
 
+    const robius_packaging_commands_version = normalizeInput(
+      core.getInput('robius_packaging_commands_version'),
+    );
+
     const packager_args = stringArgv(core.getInput('packager_args'));
     const packager_formats_input = core.getInput('packager_formats');
     const packager_formats = packager_formats_input
@@ -186,6 +190,7 @@ async function run(): Promise<void> {
       args,
       packager_args: packager_args.length ? packager_args : undefined,
       packager_formats: packager_formats.length ? packager_formats : undefined,
+      robius_packaging_commands_version,
       mobile_cargo_extra_args: mobile_cargo_extra_args.length ? mobile_cargo_extra_args : undefined,
       android_cargo_extra_args: android_cargo_extra_args.length ? android_cargo_extra_args : undefined,
       ios_cargo_extra_args: ios_cargo_extra_args.length ? ios_cargo_extra_args : undefined,

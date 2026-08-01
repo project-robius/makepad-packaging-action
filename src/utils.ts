@@ -179,6 +179,69 @@ export function parse_manifest_toml(path: string): JsonMap | null {
   }
 }
 
+/**
+ * Nearest Cargo.lock at or above the given dir, since a workspace member's lockfile
+ * lives at the workspace root.
+ */
+function findNearestLockfile(startPath: string): string | undefined {
+  let dir = resolve(startPath);
+  while (true) {
+    const lockfile = join(dir, 'Cargo.lock');
+    if (existsSync(lockfile)) return lockfile;
+
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/**
+ * Resolve the git repo and rev that Cargo.lock pins `makepad-widgets` to, so cargo-makepad
+ * can be built from the exact same makepad the app depends on.
+ */
+export function resolveMakepadGitSource(
+  path: string,
+): { repo: string; rev: string } | undefined {
+  const lockfile = findNearestLockfile(path);
+  if (!lockfile) {
+    console.warn(`No Cargo.lock found at or above ${path}.`);
+    return undefined;
+  }
+
+  let packages: unknown;
+  try {
+    packages = (parseToml(readFileSync(lockfile).toString()) as Record<string, unknown>).package;
+  } catch (e) {
+    console.warn(`Could not parse ${lockfile}:`, (e as Error).message);
+    return undefined;
+  }
+  if (!Array.isArray(packages)) return undefined;
+
+  const pkg = packages.find(
+    (entry) => (entry as Record<string, unknown>)?.name === 'makepad-widgets',
+  ) as Record<string, unknown> | undefined;
+
+  const source = toNonEmptyString(pkg?.source);
+  if (!source?.startsWith('git+')) return undefined;
+
+  const [repoWithQuery, rev] = source.slice('git+'.length).split('#');
+  if (!rev) return undefined;
+  return { repo: repoWithQuery.split('?')[0], rev };
+}
+
+/**
+ * Short rev an installed git-sourced cargo tool was built from, per `cargo install --list`.
+ */
+export function installedCargoToolRev(command: string): string | undefined {
+  try {
+    const list = execSync('cargo install --list', { encoding: 'utf8' });
+    const line = list.split('\n').find((l) => l.startsWith(`${command} v`));
+    return line?.match(/#([0-9a-f]+)\)/)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
 function toNonEmptyString(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
