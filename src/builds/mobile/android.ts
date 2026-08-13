@@ -104,7 +104,10 @@ export async function buildAndroidArtifacts(
     console.log(`Using ${cargo_extra_args.length} extra Android cargo arg(s).`);
   }
 
+  // Distinct on purpose: the prefix disambiguates build artifacts on disk, while the label
+  // is what a user sees under the app icon, so it stays just the app's name.
   const apk_prefix = `${app_name}_v${app_version}_${resolved_abi}`;
+  const app_label = buildOptions.android_app_label ?? app_name;
 
   if (mode === 'debug') {
     console.log(' ⚙️  Building Android debug APK...');
@@ -115,7 +118,7 @@ export async function buildAndroidArtifacts(
       'android',
       `--abi=${resolved_abi}`,
       '--package-name=' + package_identifier,
-      '--app-label=' + `${apk_prefix}_debug`,
+      '--app-label=' + app_label,
       ...variant_arg,
       'build',
       '-p',
@@ -148,7 +151,7 @@ export async function buildAndroidArtifacts(
       'android',
       `--abi=${resolved_abi}`,
       '--package-name=' + package_identifier,
-      '--app-label=' + apk_prefix,
+      '--app-label=' + app_label,
       ...variant_arg,
       'build',
       '-p',

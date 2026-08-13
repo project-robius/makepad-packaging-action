@@ -97,7 +97,10 @@ inputs:
     description: 'The version of the makepad app. If not provided, it will be inferred from `Cargo.toml` version field.'
 
   identifier:
-    description: 'The bundle identifier for the app (e.g., com.example.makepadapp).'
+    description: 'The bundle identifier for the app (e.g., com.example.makepadapp). Defaults to `[package.metadata.packager].identifier` from `Cargo.toml`, or `org.makepad.<crate name>` if that is unset.'
+
+  android_app_label:
+    description: 'The name shown under the Android app icon. Defaults to the app name, which itself defaults to `[package.metadata.packager].product_name`.'
 
   project_path:
     description: 'The path to the Makepad project. Defaults to the root of the repository.'

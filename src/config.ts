@@ -37,12 +37,25 @@ export class PackagingConfig {
       if (!name || !version) {
         throw new Error('Could not resolve package name/version from Cargo.toml (including workspace.package inheritance).');
       }
-      const identifier = `org.makepad.${name.toLowerCase()}`;
+      // `cargo packager` and `cargo makepad` both treat these as the app's identity, and
+      // `cargo makepad` already falls back to them, so prefer them over a generated default.
+      // Without this an app with correct metadata still gets `org.makepad.<crate>`, which
+      // on Android is a different package name and so installs alongside the real app.
+      const packager = (manifest.package as Record<string, any> | undefined)
+        ?.metadata?.packager as Record<string, unknown> | undefined;
+      const packager_identifier = typeof packager?.identifier === 'string'
+        ? packager.identifier.trim()
+        : undefined;
+      const packager_product_name = typeof packager?.product_name === 'string'
+        ? packager.product_name.trim()
+        : undefined;
+
+      const identifier = packager_identifier || `org.makepad.${name.toLowerCase()}`;
       const main_binary_name = name; // Default to package name, can be overridden by [[bin]] section if needed.
       return {
         android_config: {
           identifier,
-          product_name: name,
+          product_name: packager_product_name || name,
           version,
           main_binary_name,
         }
