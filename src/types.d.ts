@@ -22,6 +22,7 @@ export interface BuildOptions {
   android_abi?: AndroidABI;
   android_full_ndk?: boolean;
   android_variant?: AndroidVariant;
+  android_app_label?: string;
   ios_org?: string;
   ios_app?: string;
   ios_profile?: string;

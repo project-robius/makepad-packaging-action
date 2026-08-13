@@ -89,6 +89,7 @@ async function run(): Promise<void> {
     const android_abi = getEnvValue('MAKEPAD_ANDROID_ABI') ?? 'aarch64';
     const android_full_ndk = parseEnvBool(getEnvValue('MAKEPAD_ANDROID_FULL_NDK'));
     const android_variant = getEnvValue('MAKEPAD_ANDROID_VARIANT') ?? 'default';
+    const android_app_label = normalizeInput(core.getInput('android_app_label'));
     const mobile_cargo_extra_args = stringArgv(getEnvValue('MAKEPAD_MOBILE_CARGO_EXTRA_ARGS') ?? '');
     const android_cargo_extra_args = stringArgv(getEnvValue('MAKEPAD_ANDROID_CARGO_EXTRA_ARGS') ?? '');
 
@@ -197,6 +198,7 @@ async function run(): Promise<void> {
       android_abi: android_abi as BuildOptions['android_abi'],
       android_full_ndk,
       android_variant: android_variant as BuildOptions['android_variant'],
+      android_app_label,
       ios_org,
       ios_app,
       ios_profile,
