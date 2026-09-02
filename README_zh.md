@@ -58,7 +58,7 @@ jobs:
             binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
             libwayland-dev libxkbcommon-dev libegl1
 
-      - uses: project-robius/makepad-packaging-action@v1.7.0
+      - uses: project-robius/makepad-packaging-action@v1.8.1
         with:
           packager_formats: deb
 ```
@@ -143,11 +143,13 @@ jobs:
 - `github_token`: 用于创建/上传 release 的 token（默认读取环境变量 `GITHUB_TOKEN`）
 - `project_path`: Makepad 项目根路径，相对于工作目录解析（默认：`.`）
 - `projectPath`: `project_path` 的别名；两者都设置时以 `project_path` 为准
-- `app_name`: 覆盖应用名（若省略则自动从 `Cargo.toml` 读取）
+- `app_name`: 覆盖应用名。默认取 `[package.metadata.packager].product_name`，其次是 `Cargo.toml`
+  的 name。移动端还会用它拼出 `<name>_v<version>_<abi>` 的产物前缀。
 - `app_version`: 覆盖版本号（若省略则自动从 `Cargo.toml` 读取）
 - `identifier`: 覆盖 bundle identifier。仅对移动端生效：它会成为 Android 包名，并用于推导 iOS 的
-  org/app。桌面打包会忽略它，改用 `[package.metadata.packager]` 里的 identifier。默认值为
-  `org.makepad.<crate name>`。
+  org/app。桌面打包会忽略它，改用 `[package.metadata.packager]` 里的 identifier。默认取
+  `[package.metadata.packager].identifier`，未设置时才回退到 `org.makepad.<crate name>`。
+- `android_app_label`: Android 图标下显示的名称。默认与应用名相同，只有需要两者不一致时才设置。
 - `include_release`: 是否包含 release 构建（默认：`true`）
 - `include_debug`: 是否包含 debug 构建（默认：`false`）。两者都开启会重新扫描同一个输出目录，
   所以 release 产物会被再收集一遍，并被标记为 `debug`。
@@ -289,7 +291,7 @@ action 会自己安装需要的工具，你不用再加 `cargo install` 步骤�
 `robius-packaging-commands` 由桌面端构建负责安装，所以不需要额外步骤：
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   with:
     packager_formats: deb
     releaseId: ${{ needs.create_release.outputs.release_id }}
@@ -400,7 +402,7 @@ iOS 真机构建需要 provisioning profile。请在 Xcode 中创建一个空应
 当未设置 `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` 时，action 会自动安装并提取。
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   env:
     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -413,7 +415,7 @@ iOS 真机构建需要 provisioning profile。请在 Xcode 中创建一个空应
 ### 矩阵发布示例
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
@@ -447,7 +449,7 @@ jobs:
     needs: create_release
     runs-on: ubuntu-22.04
     steps:
-      - uses: project-robius/makepad-packaging-action@v1.7.0
+      - uses: project-robius/makepad-packaging-action@v1.8.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -458,7 +460,7 @@ jobs:
 ### 仅构建 Android 示例
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   with:
     args: --target aarch64-linux-android
 ```

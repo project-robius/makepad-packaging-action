@@ -39,7 +39,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Package (iOS)
-        uses: project-robius/makepad-packaging-action@v1.7.0
+        uses: project-robius/makepad-packaging-action@v1.8.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAKEPAD_IOS_ORG: ${{ inputs.ios_org }}

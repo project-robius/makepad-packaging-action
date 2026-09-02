@@ -58,7 +58,7 @@ jobs:
             binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
             libwayland-dev libxkbcommon-dev libegl1
 
-      - uses: project-robius/makepad-packaging-action@v1.7.0
+      - uses: project-robius/makepad-packaging-action@v1.8.1
         with:
           packager_formats: deb
 ```
@@ -150,11 +150,15 @@ These inputs are already defined in `action.yaml`. Build and packaging inputs ar
 - `github_token`: token for release creation/upload (defaults to env `GITHUB_TOKEN`)
 - `project_path`: Makepad project root, resolved relative to the working directory (default: `.`)
 - `projectPath`: alias of `project_path`; `project_path` wins if both are set
-- `app_name`: override app name (auto from `Cargo.toml` if omitted)
+- `app_name`: override app name. Defaults to `[package.metadata.packager].product_name`, then
+  the `Cargo.toml` name. On mobile it also feeds the `<name>_v<version>_<abi>` artifact prefix.
 - `app_version`: override version (auto from `Cargo.toml` if omitted)
 - `identifier`: override bundle identifier. Mobile only: it becomes the Android package name
   and seeds the iOS org/app derivation. Desktop packaging ignores it and uses the identifier
-  in `[package.metadata.packager]`. Defaults to `org.makepad.<crate name>`.
+  in `[package.metadata.packager]`. Defaults to `[package.metadata.packager].identifier`, or
+  `org.makepad.<crate name>` if that is unset.
+- `android_app_label`: the name shown under the Android app icon. Defaults to the app name, so
+  set this only when the launcher label should differ.
 - `include_release`: include release build (default: `true`)
 - `include_debug`: include debug build (default: `false`). Enabling both re-scans the same
   output directory, so release artifacts are collected a second time and labelled `debug`.
@@ -316,7 +320,7 @@ prints the exact packages that are missing and the command that adds them.
 `robius-packaging-commands` is installed by the desktop build, so no extra step is needed:
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   with:
     packager_formats: deb
     releaseId: ${{ needs.create_release.outputs.release_id }}
@@ -434,7 +438,7 @@ For iOS device builds, supply certificate and provisioning profile via env vars.
 When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will install and extract them.
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   env:
     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -447,7 +451,7 @@ When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will insta
 ### Example: matrix release
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
@@ -481,7 +485,7 @@ jobs:
     needs: create_release
     runs-on: ubuntu-22.04
     steps:
-      - uses: project-robius/makepad-packaging-action@v1.7.0
+      - uses: project-robius/makepad-packaging-action@v1.8.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -492,7 +496,7 @@ jobs:
 ### Example: Android only
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.7.0
+- uses: project-robius/makepad-packaging-action@v1.8.1
   with:
     args: --target aarch64-linux-android
 ```

@@ -1,5 +1,5 @@
-name: 'makepad-packaging-action'
-description: 'Build And Release Makepad Apps, including MacOS, Windows, Linux, Android and iOS, using GitHub Actions.'
+name: 'Makepad Packaging Action'
+description: 'Build, package, and release Makepad apps for macOS, Windows, Linux, Android, and iOS'
 author: 'Tyrese Luo <tyreseluo@outlook.com>'
 branding:
   icon: 'box'
