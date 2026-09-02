@@ -58,7 +58,7 @@ jobs:
             binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
             libwayland-dev libxkbcommon-dev libegl1
 
-      - uses: project-robius/makepad-packaging-action@v1.8.1
+      - uses: project-robius/makepad-packaging-action@v1.8.2
         with:
           packager_formats: deb
 ```
@@ -291,7 +291,7 @@ action 会自己安装需要的工具，你不用再加 `cargo install` 步骤�
 `robius-packaging-commands` 由桌面端构建负责安装，所以不需要额外步骤：
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   with:
     packager_formats: deb
     releaseId: ${{ needs.create_release.outputs.release_id }}
@@ -402,7 +402,7 @@ iOS 真机构建需要 provisioning profile。请在 Xcode 中创建一个空应
 当未设置 `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` 时，action 会自动安装并提取。
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   env:
     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -415,7 +415,7 @@ iOS 真机构建需要 provisioning profile。请在 Xcode 中创建一个空应
 ### 矩阵发布示例
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
@@ -449,7 +449,7 @@ jobs:
     needs: create_release
     runs-on: ubuntu-22.04
     steps:
-      - uses: project-robius/makepad-packaging-action@v1.8.1
+      - uses: project-robius/makepad-packaging-action@v1.8.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -460,7 +460,7 @@ jobs:
 ### 仅构建 Android 示例
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   with:
     args: --target aarch64-linux-android
 ```

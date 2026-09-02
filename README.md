@@ -58,7 +58,7 @@ jobs:
             binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
             libwayland-dev libxkbcommon-dev libegl1
 
-      - uses: project-robius/makepad-packaging-action@v1.8.1
+      - uses: project-robius/makepad-packaging-action@v1.8.2
         with:
           packager_formats: deb
 ```
@@ -320,7 +320,7 @@ prints the exact packages that are missing and the command that adds them.
 `robius-packaging-commands` is installed by the desktop build, so no extra step is needed:
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   with:
     packager_formats: deb
     releaseId: ${{ needs.create_release.outputs.release_id }}
@@ -438,7 +438,7 @@ For iOS device builds, supply certificate and provisioning profile via env vars.
 When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will install and extract them.
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   env:
     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -451,7 +451,7 @@ When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will insta
 ### Example: matrix release
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
@@ -485,7 +485,7 @@ jobs:
     needs: create_release
     runs-on: ubuntu-22.04
     steps:
-      - uses: project-robius/makepad-packaging-action@v1.8.1
+      - uses: project-robius/makepad-packaging-action@v1.8.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -496,7 +496,7 @@ jobs:
 ### Example: Android only
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.1
+- uses: project-robius/makepad-packaging-action@v1.8.2
   with:
     args: --target aarch64-linux-android
 ```
