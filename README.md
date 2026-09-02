@@ -48,7 +48,7 @@ jobs:
   package:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
 
       # Makepad's Linux system dependencies. Not needed on macOS or Windows.
