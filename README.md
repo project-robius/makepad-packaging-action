@@ -58,7 +58,7 @@ jobs:
             binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
             libwayland-dev libxkbcommon-dev libegl1
 
-      - uses: project-robius/makepad-packaging-action@v1.8.2
+      - uses: project-robius/makepad-packaging-action@v1.8.3
         with:
           packager_formats: deb
 ```
@@ -137,7 +137,7 @@ These inputs are already defined in `action.yaml`. Build and packaging inputs ar
 - `releaseCommitish`: branch/commit SHA for creating tag/release (default: current commit SHA)
 - `uploadUpdaterJson`: upload/update `latest.json` updater metadata asset on the release (default: `true`)
 - `uploadUpdaterSignatures`: upload `.sig` files (if present next to built assets) and include signatures in `latest.json` (default: `true`)
-- `retryAttempts`: additional retry attempts for release-asset/latest.json upload conflicts (default: `0`). Uploads always get at least 2 attempts, so this adds to that floor.
+- `retryAttempts`: additional retry attempts for release-asset/latest.json upload conflicts (default: `0`). Uploads always get at least 2 attempts, so `1` changes nothing; `2` or more raises the ceiling to `retryAttempts + 1`.
 - `owner`: release target repository owner (default: current repo owner)
 - `repo`: release target repository name (default: current repo name)
 - `githubBaseUrl`: custom GitHub API base URL for GHE/self-hosted APIs (default: env `GITHUB_API_URL`, which GitHub Actions always sets)
@@ -156,7 +156,7 @@ These inputs are already defined in `action.yaml`. Build and packaging inputs ar
 - `identifier`: override bundle identifier. Mobile only: it becomes the Android package name
   and seeds the iOS org/app derivation. Desktop packaging ignores it and uses the identifier
   in `[package.metadata.packager]`. Defaults to `[package.metadata.packager].identifier`, or
-  `org.makepad.<crate name>` if that is unset.
+  `org.makepad.<lowercased crate name>` if that is unset.
 - `android_app_label`: the name shown under the Android app icon. Defaults to the app name, so
   set this only when the launcher label should differ.
 - `include_release`: include release build (default: `true`)
@@ -269,7 +269,7 @@ when absent, and an existing copy on PATH is reused.
 
 ### Behavior notes
 
-- Android package names are normalized to valid Java identifiers (e.g. `dora-studio` → `dora_studio`)
+- Android package names are lowercased and normalized to valid Java identifiers (e.g. `dora-studio` → `dora_studio`)
 - Desktop artifacts are collected from `[package.metadata.packager].out_dir` (default
   `<root>/dist`) by file extension, with no filename filtering, so unrelated files with a
   packaged extension sitting in that directory are picked up too
@@ -320,7 +320,7 @@ prints the exact packages that are missing and the command that adds them.
 `robius-packaging-commands` is installed by the desktop build, so no extra step is needed:
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   with:
     packager_formats: deb
     releaseId: ${{ needs.create_release.outputs.release_id }}
@@ -438,7 +438,7 @@ For iOS device builds, supply certificate and provisioning profile via env vars.
 When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will install and extract them.
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   env:
     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -451,7 +451,7 @@ When `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` are omitted, the action will insta
 ### Example: matrix release
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
@@ -485,7 +485,7 @@ jobs:
     needs: create_release
     runs-on: ubuntu-22.04
     steps:
-      - uses: project-robius/makepad-packaging-action@v1.8.2
+      - uses: project-robius/makepad-packaging-action@v1.8.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -496,7 +496,7 @@ jobs:
 ### Example: Android only
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   with:
     args: --target aarch64-linux-android
 ```

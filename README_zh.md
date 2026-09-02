@@ -58,7 +58,7 @@ jobs:
             binfmt-support libxcursor-dev libx11-dev libasound2-dev libpulse-dev \
             libwayland-dev libxkbcommon-dev libegl1
 
-      - uses: project-robius/makepad-packaging-action@v1.8.2
+      - uses: project-robius/makepad-packaging-action@v1.8.3
         with:
           packager_formats: deb
 ```
@@ -130,7 +130,7 @@ jobs:
 - `releaseCommitish`: 创建 tag/release 所基于的分支或 commit SHA（默认：当前 commit SHA）
 - `uploadUpdaterJson`: 是否在 release 上上传/更新 `latest.json` 更新器元数据资产（默认：`true`）
 - `uploadUpdaterSignatures`: 是否上传 `.sig` 文件（若与构建产物同目录存在），并把签名写入 `latest.json`（默认：`true`）
-- `retryAttempts`: release 资产与 `latest.json` 上传发生冲突时的额外重试次数（默认：`0`）。上传本身至少会尝试 2 次，这个值是在此基础上追加的。
+- `retryAttempts`: release 资产与 `latest.json` 上传发生冲突时的额外重试次数（默认：`0`）。上传本身至少会尝试 2 次，所以填 `1` 没有任何效果，填 2 或更大才会把上限提到 `retryAttempts + 1`。
 - `owner`: 发布目标仓库的 owner（默认：当前仓库 owner）
 - `repo`: 发布目标仓库名（默认：当前仓库名）
 - `githubBaseUrl`: 自定义 GitHub API base URL，用于 GHE 或自建 API（默认：环境变量 `GITHUB_API_URL`，GitHub Actions 总会设置它）
@@ -148,7 +148,7 @@ jobs:
 - `app_version`: 覆盖版本号（若省略则自动从 `Cargo.toml` 读取）
 - `identifier`: 覆盖 bundle identifier。仅对移动端生效：它会成为 Android 包名，并用于推导 iOS 的
   org/app。桌面打包会忽略它，改用 `[package.metadata.packager]` 里的 identifier。默认取
-  `[package.metadata.packager].identifier`，未设置时才回退到 `org.makepad.<crate name>`。
+  `[package.metadata.packager].identifier`，未设置时才回退到 `org.makepad.<小写 crate 名>`。
 - `android_app_label`: Android 图标下显示的名称。默认与应用名相同，只有需要两者不一致时才设置。
 - `include_release`: 是否包含 release 构建（默认：`true`）
 - `include_debug`: 是否包含 debug 构建（默认：`false`）。两者都开启会重新扫描同一个输出目录，
@@ -247,7 +247,7 @@ action 会自己安装需要的工具，你不用再加 `cargo install` 步骤�
 
 ### 行为说明
 
-- Android 包名会被规范为合法的 Java 标识符（例如 `dora-studio` → `dora_studio`）
+- Android 包名会被转为小写并规范为合法的 Java 标识符（例如 `dora-studio` → `dora_studio`）
 - 桌面端产物按文件扩展名从 `[package.metadata.packager].out_dir`（默认 `<root>/dist`）收集，
   不做文件名过滤，所以目录里其他带相同扩展名的无关文件也会被一并收进来
 - 使用显式 `--target` 打包前，如果你的 `before-each-package-command` 把 `--path-to-binary` 指向了
@@ -291,7 +291,7 @@ action 会自己安装需要的工具，你不用再加 `cargo install` 步骤�
 `robius-packaging-commands` 由桌面端构建负责安装，所以不需要额外步骤：
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   with:
     packager_formats: deb
     releaseId: ${{ needs.create_release.outputs.release_id }}
@@ -402,7 +402,7 @@ iOS 真机构建需要 provisioning profile。请在 Xcode 中创建一个空应
 当未设置 `MAKEPAD_IOS_PROFILE`/`MAKEPAD_IOS_CERT` 时，action 会自动安装并提取。
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   env:
     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -415,7 +415,7 @@ iOS 真机构建需要 provisioning profile。请在 Xcode 中创建一个空应
 ### 矩阵发布示例
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   with:
@@ -449,7 +449,7 @@ jobs:
     needs: create_release
     runs-on: ubuntu-22.04
     steps:
-      - uses: project-robius/makepad-packaging-action@v1.8.2
+      - uses: project-robius/makepad-packaging-action@v1.8.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -460,7 +460,7 @@ jobs:
 ### 仅构建 Android 示例
 
 ```yaml
-- uses: project-robius/makepad-packaging-action@v1.8.2
+- uses: project-robius/makepad-packaging-action@v1.8.3
   with:
     args: --target aarch64-linux-android
 ```

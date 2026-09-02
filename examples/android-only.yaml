@@ -62,7 +62,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Package (android)
-        uses: project-robius/makepad-packaging-action@v1.8.2
+        uses: project-robius/makepad-packaging-action@v1.8.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAKEPAD_ANDROID_ABI: ${{ inputs.android_abi }}
